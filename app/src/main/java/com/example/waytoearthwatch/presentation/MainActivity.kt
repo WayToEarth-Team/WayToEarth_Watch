@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
                             // 러닝 종료 후 폰으로 전송
                             val session = runningManager.stopRunning()
                             session?.let {
-                                val success = phoneCommunication.sendRunningDataViaMessage(it)
+                                val success = phoneCommunication.sendRunningCompleteViaMessage(it)
                                 if (success) {
                                     // 전송 성공 처리
                                 } else {
