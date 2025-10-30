@@ -22,6 +22,7 @@ class RunningManager(private val context: Context) {
     private var currentHeartRate: Int? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var realtimeJob: Job? = null
 
     /**
      * 러닝 시작
@@ -55,6 +56,33 @@ class RunningManager(private val context: Context) {
         }
 
         return sessionId
+    }
+
+    /**
+     * 외부 세션 ID로 러닝 시작 (폰 명령 대응)
+     */
+    suspend fun startRunning(sessionId: String, runningType: String? = null) {
+        val startTime = System.currentTimeMillis()
+
+        currentSession = RunningSession(
+            sessionId = sessionId,
+            startTime = startTime,
+            routePoints = mutableListOf()
+        )
+
+        heartRateService.startExercise()
+
+        scope.launch {
+            heartRateService.getHeartRateUpdates().collect { hr ->
+                currentHeartRate = hr
+            }
+        }
+
+        scope.launch {
+            locationService.getLocationUpdates().collect { location ->
+                onLocationUpdate(location)
+            }
+        }
     }
 
     /**
@@ -150,6 +178,38 @@ class RunningManager(private val context: Context) {
         currentHeartRate = null
 
         return session
+    }
+
+    /**
+     * 실시간 동기화 시작 (10초 주기)
+     */
+    fun startRealtimeSync(comm: com.example.waytoearthwatch.service.PhoneCommunicationService) {
+        realtimeJob?.cancel()
+        realtimeJob = scope.launch {
+            while (isActive) {
+                val snapshot = currentSession
+                if (snapshot != null) {
+                    val lastPoint = snapshot.routePoints.lastOrNull()
+                    val data = mapOf(
+                        "sessionId" to snapshot.sessionId,
+                        "distanceMeters" to snapshot.totalDistanceMeters,
+                        "durationSeconds" to snapshot.durationSeconds,
+                        "heartRate" to lastPoint?.heartRate,
+                        "paceSeconds" to lastPoint?.paceSeconds,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                    try {
+                        comm.sendRealtimeUpdate(data)
+                    } catch (_: Exception) {}
+                }
+                delay(10_000)
+            }
+        }
+    }
+
+    fun stopRealtimeSync() {
+        realtimeJob?.cancel()
+        realtimeJob = null
     }
 
     /**
