@@ -13,29 +13,39 @@ class PhoneCommunicationService(private val context: Context) {
     private val gson = Gson()
 
     companion object {
-        private const val RUNNING_DATA_PATH = "/waytoearth/running/complete"
-        private const val MESSAGE_PATH = "/waytoearth/message"
+        const val PATH_COMMAND_START = "/waytoearth/command/start"
+        const val PATH_COMMAND_STOP = "/waytoearth/command/stop"
+
+        const val PATH_RESPONSE_STARTED = "/waytoearth/response/started"
+        const val PATH_RESPONSE_STOPPED = "/waytoearth/response/stopped"
+
+        const val PATH_REALTIME_UPDATE = "/waytoearth/realtime/update"
+        const val PATH_RUNNING_COMPLETE = "/waytoearth/running/complete"
     }
 
-    /**
-     * 러닝 데이터를 폰으로 전송
-     * @param session 러닝 세션 데이터
-     * @return 성공 여부
-     */
+    private suspend fun sendMessageAll(path: String, payloadBytes: ByteArray): Boolean {
+        return try {
+            val nodes = Wearable.getNodeClient(context).connectedNodes.await()
+            if (nodes.isEmpty()) return false
+            nodes.forEach { node ->
+                messageClient.sendMessage(node.id, path, payloadBytes).await()
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    // 최종 세션 데이터 전송 (Data Layer)
     suspend fun sendRunningDataToPhone(session: RunningSession): Boolean {
         return try {
-            // JSON 변환
             val json = gson.toJson(session)
-
-            // PutDataRequest 생성
-            val putDataReq = PutDataMapRequest.create(RUNNING_DATA_PATH).apply {
+            val putDataReq = PutDataMapRequest.create(PATH_RUNNING_COMPLETE).apply {
                 dataMap.putString("session_data", json)
                 dataMap.putLong("timestamp", System.currentTimeMillis())
             }.asPutDataRequest().setUrgent()
-
-            // 전송
             dataClient.putDataItem(putDataReq).await()
-
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -43,45 +53,27 @@ class PhoneCommunicationService(private val context: Context) {
         }
     }
 
-    /**
-     * 메시지로 즉시 전송 (데이터 레이어보다 빠름)
-     * @param session 러닝 세션 데이터
-     * @return 성공 여부
-     */
-    suspend fun sendRunningDataViaMessage(session: RunningSession): Boolean {
-        return try {
-            val json = gson.toJson(session)
-            val nodes = getConnectedNodes()
-
-            if (nodes.isEmpty()) {
-                return false
-            }
-
-            // 연결된 모든 노드(폰)에 메시지 전송
-            nodes.forEach { nodeId ->
-                messageClient.sendMessage(
-                    nodeId,
-                    MESSAGE_PATH,
-                    json.toByteArray()
-                ).await()
-            }
-
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
+    // 최종 세션 데이터 전송 (MessageClient)
+    suspend fun sendRunningCompleteViaMessage(session: RunningSession): Boolean {
+        val json = gson.toJson(session)
+        return sendMessageAll(PATH_RUNNING_COMPLETE, json.toByteArray())
     }
 
-    /**
-     * 연결된 폰 노드 가져오기
-     */
-    private suspend fun getConnectedNodes(): List<String> {
-        return try {
-            val nodes = Wearable.getNodeClient(context).connectedNodes.await()
-            nodes.map { it.id }
-        } catch (e: Exception) {
-            emptyList()
-        }
+    // 실시간 업데이트 전송 (10초마다)
+    suspend fun sendRealtimeUpdate(data: Map<String, Any?>): Boolean {
+        val json = gson.toJson(data)
+        return sendMessageAll(PATH_REALTIME_UPDATE, json.toByteArray())
+    }
+
+    // 시작/종료 응답 전송
+    suspend fun sendResponseStarted(data: Map<String, Any?>): Boolean {
+        val json = gson.toJson(data)
+        return sendMessageAll(PATH_RESPONSE_STARTED, json.toByteArray())
+    }
+
+    suspend fun sendResponseStopped(data: Map<String, Any?>): Boolean {
+        val json = gson.toJson(data)
+        return sendMessageAll(PATH_RESPONSE_STOPPED, json.toByteArray())
     }
 }
+
