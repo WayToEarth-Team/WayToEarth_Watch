@@ -1,0 +1,159 @@
+package com.example.waytoearthwatch.manager
+
+import android.content.Context
+import android.location.Location
+import com.example.waytoearthwatch.data.RoutePoint
+import com.example.waytoearthwatch.data.RunningSession
+import com.example.waytoearthwatch.service.HeartRateService
+import com.example.waytoearthwatch.service.LocationService
+import com.example.waytoearthwatch.utils.DistanceCalculator
+import com.example.waytoearthwatch.utils.HeartRateCalculator
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import java.util.*
+
+class RunningManager(private val context: Context) {
+
+    private val locationService = LocationService(context)
+    private val heartRateService = HeartRateService(context)
+
+    private var currentSession: RunningSession? = null
+    private var lastLocation: Location? = null
+    private var currentHeartRate: Int? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * 러닝 시작
+     * @return 세션 ID
+     */
+    suspend fun startRunning(): String {
+        val sessionId = "watch-${UUID.randomUUID()}"
+        val startTime = System.currentTimeMillis()
+
+        currentSession = RunningSession(
+            sessionId = sessionId,
+            startTime = startTime,
+            routePoints = mutableListOf()
+        )
+
+        // Health Services 시작
+        heartRateService.startExercise()
+
+        // 심박수 수집 시작
+        scope.launch {
+            heartRateService.getHeartRateUpdates().collect { hr ->
+                currentHeartRate = hr
+            }
+        }
+
+        // 위치 수집 시작 (1초마다)
+        scope.launch {
+            locationService.getLocationUpdates().collect { location ->
+                onLocationUpdate(location)
+            }
+        }
+
+        return sessionId
+    }
+
+    /**
+     * 위치 업데이트 처리 (1초마다 호출됨)
+     */
+    private fun onLocationUpdate(location: Location) {
+        val session = currentSession ?: return
+
+        // 거리 계산
+        val distanceIncrement = if (lastLocation != null) {
+            DistanceCalculator.calculateDistance(
+                lastLocation!!.latitude,
+                lastLocation!!.longitude,
+                location.latitude,
+                location.longitude
+            )
+        } else {
+            0.0
+        }
+
+        session.totalDistanceMeters += distanceIncrement.toInt()
+
+        // 경과 시간 계산 (초)
+        val elapsedSeconds = ((System.currentTimeMillis() - session.startTime) / 1000).toInt()
+        session.durationSeconds = elapsedSeconds
+
+        // 즉시 페이스 계산 (최근 100m 기준)
+        val instantPace = calculateInstantPace(session.routePoints)
+
+        // RoutePoint 생성
+        val routePoint = RoutePoint(
+            latitude = location.latitude,
+            longitude = location.longitude,
+            sequence = session.routePoints.size,
+            timestampSeconds = elapsedSeconds,
+            heartRate = currentHeartRate,
+            paceSeconds = instantPace,
+            altitude = location.altitude,
+            accuracy = location.accuracy.toDouble(),
+            cumulativeDistanceMeters = session.totalDistanceMeters
+        )
+
+        session.routePoints.add(routePoint)
+        lastLocation = location
+    }
+
+    /**
+     * 즉시 페이스 계산 (최근 100m 기준)
+     */
+    private fun calculateInstantPace(points: List<RoutePoint>): Int? {
+        if (points.size < 2) return null
+
+        // 최근 100m 구간 찾기
+        val currentDistance = points.last().cumulativeDistanceMeters
+        val targetDistance = currentDistance - 100
+
+        val startPoint = points.findLast {
+            it.cumulativeDistanceMeters <= targetDistance
+        } ?: return null
+
+        val recentDistance = (currentDistance - startPoint.cumulativeDistanceMeters).toDouble()
+        val recentDuration = points.last().timestampSeconds - startPoint.timestampSeconds
+
+        return DistanceCalculator.calculateInstantPace(recentDistance, recentDuration)
+    }
+
+    /**
+     * 러닝 종료 및 데이터 반환
+     * @return RunningSession
+     */
+    suspend fun stopRunning(): RunningSession? {
+        val session = currentSession ?: return null
+
+        // Health Services 종료
+        heartRateService.endExercise()
+
+        // 심박수 통계 계산
+        val heartRates = session.routePoints.mapNotNull { it.heartRate }
+        session.averageHeartRate = HeartRateCalculator.calculateAverage(heartRates)
+        session.maxHeartRate = HeartRateCalculator.calculateMax(heartRates)
+
+        // 평균 페이스 계산
+        val averagePaceSeconds = DistanceCalculator.calculatePace(
+            session.totalDistanceMeters,
+            session.durationSeconds
+        )
+
+        // 칼로리 계산 (간단한 공식: 1km당 60kcal)
+        session.calories = (session.totalDistanceMeters / 1000.0 * 60).toInt()
+
+        currentSession = null
+        lastLocation = null
+        currentHeartRate = null
+
+        return session
+    }
+
+    /**
+     * 현재 세션 정보 가져오기 (실시간 UI 업데이트용)
+     */
+    fun getCurrentSession(): RunningSession? = currentSession
+}
