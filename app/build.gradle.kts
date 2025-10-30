@@ -64,8 +64,8 @@ dependencies {
     // Google Play Services - 위치 추적 (GPS)
     implementation("com.google.android.gms:play-services-location:21.0.1")
 
-    // Health Services - 심박수 센서
-    implementation("androidx.health:health-services-client:1.0.0-beta03")
+    // Health Services - 심박수 센서 (안정화 버전)
+    implementation("androidx.health:health-services-client:1.0.0")
 
     // Coroutines - 비동기 처리
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

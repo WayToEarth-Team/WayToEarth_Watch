@@ -3,6 +3,8 @@
 
     <!-- 워치 전용 앱 -->
     <uses-feature android:name="android.hardware.type.watch" />
+    <uses-feature android:name="android.hardware.sensor.heartrate" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <!-- 필수 권한들 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -12,8 +14,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- 심박수 센서 권한 -->
-    <uses-permission android:name="android.permission.BODY_SENSORS" />
-    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+    <uses-permission android:name="android.permission.BODY_SENSORS" android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
 
     <!-- 만보기/활동 인식 권한 -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />

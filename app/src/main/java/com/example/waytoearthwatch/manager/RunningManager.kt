@@ -2,6 +2,7 @@ package com.example.waytoearthwatch.manager
 
 import android.content.Context
 import android.location.Location
+import android.util.Log
 import com.example.waytoearthwatch.data.RoutePoint
 import com.example.waytoearthwatch.data.RunningSession
 import com.example.waytoearthwatch.service.HeartRateService
@@ -14,6 +15,7 @@ import java.util.*
 
 class RunningManager(private val context: Context) {
 
+    private val TAG = "RunningManager"
     private val locationService = LocationService(context)
     private val heartRateService = HeartRateService(context)
 
@@ -31,6 +33,7 @@ class RunningManager(private val context: Context) {
     suspend fun startRunning(): String {
         val sessionId = "watch-${UUID.randomUUID()}"
         val startTime = System.currentTimeMillis()
+        Log.d(TAG, "startRunning(generated) sessionId=$sessionId")
 
         currentSession = RunningSession(
             sessionId = sessionId,
@@ -40,11 +43,13 @@ class RunningManager(private val context: Context) {
 
         // Health Services 시작
         heartRateService.startExercise()
+        Log.d(TAG, "Exercise start requested (HS)")
 
         // 심박수 수집 시작
         scope.launch {
             heartRateService.getHeartRateUpdates().collect { hr ->
                 currentHeartRate = hr
+                if (hr != null) Log.v(TAG, "HR update bpm=$hr")
             }
         }
 
@@ -63,6 +68,7 @@ class RunningManager(private val context: Context) {
      */
     suspend fun startRunning(sessionId: String, runningType: String? = null) {
         val startTime = System.currentTimeMillis()
+        Log.d(TAG, "startRunning(external) sessionId=$sessionId type=${runningType ?: "N/A"}")
 
         currentSession = RunningSession(
             sessionId = sessionId,
@@ -71,10 +77,12 @@ class RunningManager(private val context: Context) {
         )
 
         heartRateService.startExercise()
+        Log.d(TAG, "Exercise start requested (HS)")
 
         scope.launch {
             heartRateService.getHeartRateUpdates().collect { hr ->
                 currentHeartRate = hr
+                if (hr != null) Log.v(TAG, "HR update bpm=$hr")
             }
         }
 
@@ -90,6 +98,7 @@ class RunningManager(private val context: Context) {
      */
     private fun onLocationUpdate(location: Location) {
         val session = currentSession ?: return
+        val prevSize = session.routePoints.size
 
         // 거리 계산
         val distanceIncrement = if (lastLocation != null) {
@@ -126,6 +135,9 @@ class RunningManager(private val context: Context) {
         )
 
         session.routePoints.add(routePoint)
+        if ((prevSize + 1) % 10 == 0) {
+            Log.d(TAG, "RoutePoint added count=${prevSize + 1} dist=${session.totalDistanceMeters}m dur=${session.durationSeconds}s")
+        }
         lastLocation = location
     }
 
@@ -158,6 +170,7 @@ class RunningManager(private val context: Context) {
 
         // Health Services 종료
         heartRateService.endExercise()
+        Log.d(TAG, "Exercise end requested (HS)")
 
         // 심박수 통계 계산
         val heartRates = session.routePoints.mapNotNull { it.heartRate }
@@ -186,6 +199,7 @@ class RunningManager(private val context: Context) {
     fun startRealtimeSync(comm: com.example.waytoearthwatch.service.PhoneCommunicationService) {
         realtimeJob?.cancel()
         realtimeJob = scope.launch {
+            Log.d(TAG, "Realtime sync started (10s interval)")
             while (isActive) {
                 val snapshot = currentSession
                 if (snapshot != null) {
@@ -199,8 +213,11 @@ class RunningManager(private val context: Context) {
                         "timestamp" to System.currentTimeMillis()
                     )
                     try {
+                        Log.v(TAG, "Realtime tick send distance=${snapshot.totalDistanceMeters} dur=${snapshot.durationSeconds}")
                         comm.sendRealtimeUpdate(data)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Realtime send failed: ${e.message}")
+                    }
                 }
                 delay(10_000)
             }
@@ -209,6 +226,7 @@ class RunningManager(private val context: Context) {
 
     fun stopRealtimeSync() {
         realtimeJob?.cancel()
+        Log.d(TAG, "Realtime sync stopped")
         realtimeJob = null
     }
 

@@ -24,9 +24,11 @@ class WatchCommandReceiver : WearableListenerService() {
     }
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
+        Log.d(tag, "onMessageReceived path=${messageEvent.path}")
         when (messageEvent.path) {
             PhoneCommunicationService.PATH_COMMAND_START -> handleStart(messageEvent)
             PhoneCommunicationService.PATH_COMMAND_STOP -> handleStop(messageEvent)
+            else -> Log.w(tag, "Unknown path: ${messageEvent.path}")
         }
     }
 
@@ -35,7 +37,8 @@ class WatchCommandReceiver : WearableListenerService() {
             try {
                 val json = JSONObject(String(messageEvent.data))
                 val sessionId = json.optString("sessionId")
-                val runningType = json.optString("runningType", null)
+                val runningTypeStr = json.optString("runningType", "")
+                val runningType = if (runningTypeStr.isBlank()) null else runningTypeStr
 
                 Log.d(tag, "START command: sessionId=$sessionId, type=$runningType")
 
@@ -49,6 +52,7 @@ class WatchCommandReceiver : WearableListenerService() {
                         "timestamp" to System.currentTimeMillis()
                     )
                 )
+                Log.d(tag, "START handled session=$sessionId")
             } catch (e: Exception) {
                 Log.e(tag, "Failed to handle START", e)
                 comm.sendResponseStarted(
@@ -78,10 +82,12 @@ class WatchCommandReceiver : WearableListenerService() {
                         "sessionId" to sessionId
                     )
                 )
+                Log.d(tag, "STOP handled session=$sessionId")
 
                 // 최종 세션 전송
                 if (session != null) {
-                    comm.sendRunningCompleteViaMessage(session)
+                    val ok = comm.sendRunningCompleteViaMessage(session)
+                    Log.d(tag, "Send complete via message: $ok")
                 }
             } catch (e: Exception) {
                 Log.e(tag, "Failed to handle STOP", e)
@@ -95,4 +101,3 @@ class WatchCommandReceiver : WearableListenerService() {
         }
     }
 }
-

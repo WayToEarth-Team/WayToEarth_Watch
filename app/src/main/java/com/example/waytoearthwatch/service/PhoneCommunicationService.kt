@@ -1,6 +1,7 @@
 package com.example.waytoearthwatch.service
 
 import android.content.Context
+import android.util.Log
 import com.google.android.gms.wearable.*
 import com.google.gson.Gson
 import com.example.waytoearthwatch.data.RunningSession
@@ -11,6 +12,7 @@ class PhoneCommunicationService(private val context: Context) {
     private val dataClient: DataClient = Wearable.getDataClient(context)
     private val messageClient: MessageClient = Wearable.getMessageClient(context)
     private val gson = Gson()
+    private val TAG = "PhoneCommService"
 
     companion object {
         const val PATH_COMMAND_START = "/waytoearth/command/start"
@@ -26,13 +28,15 @@ class PhoneCommunicationService(private val context: Context) {
     private suspend fun sendMessageAll(path: String, payloadBytes: ByteArray): Boolean {
         return try {
             val nodes = Wearable.getNodeClient(context).connectedNodes.await()
+            Log.d(TAG, "sendMessageAll path=$path nodes=${nodes.size}")
             if (nodes.isEmpty()) return false
             nodes.forEach { node ->
                 messageClient.sendMessage(node.id, path, payloadBytes).await()
             }
+            Log.d(TAG, "sendMessageAll OK path=$path")
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "sendMessageAll failed path=$path: ${e.message}", e)
             false
         }
     }
@@ -46,9 +50,10 @@ class PhoneCommunicationService(private val context: Context) {
                 dataMap.putLong("timestamp", System.currentTimeMillis())
             }.asPutDataRequest().setUrgent()
             dataClient.putDataItem(putDataReq).await()
+            Log.d(TAG, "sendRunningDataToPhone OK (DataLayer)")
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "sendRunningDataToPhone failed: ${e.message}", e)
             false
         }
     }
@@ -56,24 +61,27 @@ class PhoneCommunicationService(private val context: Context) {
     // 최종 세션 데이터 전송 (MessageClient)
     suspend fun sendRunningCompleteViaMessage(session: RunningSession): Boolean {
         val json = gson.toJson(session)
+        Log.d(TAG, "sendRunningCompleteViaMessage size=${json.length}")
         return sendMessageAll(PATH_RUNNING_COMPLETE, json.toByteArray())
     }
 
     // 실시간 업데이트 전송 (10초마다)
     suspend fun sendRealtimeUpdate(data: Map<String, Any?>): Boolean {
         val json = gson.toJson(data)
+        Log.v(TAG, "sendRealtimeUpdate payload=$json")
         return sendMessageAll(PATH_REALTIME_UPDATE, json.toByteArray())
     }
 
     // 시작/종료 응답 전송
     suspend fun sendResponseStarted(data: Map<String, Any?>): Boolean {
         val json = gson.toJson(data)
+        Log.d(TAG, "sendResponseStarted payload=$json")
         return sendMessageAll(PATH_RESPONSE_STARTED, json.toByteArray())
     }
 
     suspend fun sendResponseStopped(data: Map<String, Any?>): Boolean {
         val json = gson.toJson(data)
+        Log.d(TAG, "sendResponseStopped payload=$json")
         return sendMessageAll(PATH_RESPONSE_STOPPED, json.toByteArray())
     }
 }
-
