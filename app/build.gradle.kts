@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.waytoearthwatch"
+    namespace = "cloud.waytoearth.watch"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.waytoearthwatch"
+        applicationId = "cloud.waytoearth"
         minSdk = 30
         targetSdk = 36
         versionCode = 1

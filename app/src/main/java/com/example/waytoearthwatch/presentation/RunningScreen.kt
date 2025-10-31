@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.presentation
+package cloud.waytoearth.watch.presentation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -12,7 +12,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
-import com.example.waytoearthwatch.manager.RunningManager
+import cloud.waytoearth.watch.manager.RunningManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

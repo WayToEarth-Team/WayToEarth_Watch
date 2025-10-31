@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.data
+package cloud.waytoearth.watch.data
 
 data class RoutePoint(
     val latitude: Double,              // 위도

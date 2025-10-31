@@ -1,9 +1,9 @@
-package com.example.waytoearthwatch.service
+package cloud.waytoearth.watch.service
 
 import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
-import com.example.waytoearthwatch.manager.RunningManager
+import cloud.waytoearth.watch.manager.RunningManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

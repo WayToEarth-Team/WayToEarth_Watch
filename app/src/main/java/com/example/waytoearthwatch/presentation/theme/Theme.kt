@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.presentation.theme
+package cloud.waytoearth.watch.presentation.theme
 
 import androidx.compose.runtime.Composable
 import androidx.wear.compose.material.MaterialTheme

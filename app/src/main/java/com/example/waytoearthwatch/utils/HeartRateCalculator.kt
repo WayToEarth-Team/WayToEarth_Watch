@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.utils
+package cloud.waytoearth.watch.utils
 
 object HeartRateCalculator {
 

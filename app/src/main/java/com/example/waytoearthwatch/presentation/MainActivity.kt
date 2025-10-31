@@ -1,11 +1,11 @@
-package com.example.waytoearthwatch.presentation
+package cloud.waytoearth.watch.presentation
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
-import com.example.waytoearthwatch.manager.RunningManager
-import com.example.waytoearthwatch.service.PhoneCommunicationService
+import cloud.waytoearth.watch.manager.RunningManager
+import cloud.waytoearth.watch.service.PhoneCommunicationService
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {

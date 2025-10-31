@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.data
+package cloud.waytoearth.watch.data
 
 data class RunningSession(
     val sessionId: String,                   // 세션 ID (UUID)

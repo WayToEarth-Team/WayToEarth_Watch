@@ -1,10 +1,10 @@
-package com.example.waytoearthwatch.service
+package cloud.waytoearth.watch.service
 
 import android.content.Context
 import android.util.Log
 import com.google.android.gms.wearable.*
 import com.google.gson.Gson
-import com.example.waytoearthwatch.data.RunningSession
+import cloud.waytoearth.watch.data.RunningSession
 import kotlinx.coroutines.tasks.await
 
 class PhoneCommunicationService(private val context: Context) {

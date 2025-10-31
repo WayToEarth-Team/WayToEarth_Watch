@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.presentation
+package cloud.waytoearth.watch.presentation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*

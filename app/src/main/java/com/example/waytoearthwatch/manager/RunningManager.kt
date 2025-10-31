@@ -1,15 +1,16 @@
-﻿package com.example.waytoearthwatch.manager
+﻿package cloud.waytoearth.watch.manager
 
 import android.content.Context
 import android.location.Location
 import android.util.Log
-import com.example.waytoearthwatch.data.RoutePoint
-import com.example.waytoearthwatch.data.RunningSession
-import com.example.waytoearthwatch.service.HeartRateService
-import com.example.waytoearthwatch.service.HealthMetricsService
-import com.example.waytoearthwatch.service.LocationService
-import com.example.waytoearthwatch.utils.DistanceCalculator
-import com.example.waytoearthwatch.utils.HeartRateCalculator
+import cloud.waytoearth.watch.data.RoutePoint
+import cloud.waytoearth.watch.data.RunningSession
+import cloud.waytoearth.watch.service.HeartRateService
+import cloud.waytoearth.watch.service.HealthMetricsService
+import cloud.waytoearth.watch.service.LocationService
+import cloud.waytoearth.watch.service.PhoneCommunicationService
+import cloud.waytoearth.watch.utils.DistanceCalculator
+import cloud.waytoearth.watch.utils.HeartRateCalculator
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.*
@@ -242,7 +243,7 @@ class RunningManager(private val context: Context) {
     /**
      * ?ㅼ떆媛??숆린???쒖옉 (10珥?二쇨린)
      */
-    fun startRealtimeSync(comm: com.example.waytoearthwatch.service.PhoneCommunicationService) {
+    fun startRealtimeSync(comm: PhoneCommunicationService) {
         realtimeJob?.cancel()
         realtimeJob = scope.launch {
             Log.d(TAG, "Realtime sync started (10s interval)")

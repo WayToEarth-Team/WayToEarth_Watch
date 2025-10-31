@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.service
+package cloud.waytoearth.watch.service
 
 import android.content.Context
 import android.hardware.Sensor
