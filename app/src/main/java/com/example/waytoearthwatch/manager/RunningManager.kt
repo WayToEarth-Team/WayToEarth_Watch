@@ -250,12 +250,30 @@ class RunningManager(private val context: Context) {
                 val snapshot = currentSession
                 if (snapshot != null) {
                     val lastPoint = snapshot.routePoints.lastOrNull()
+                    val avgPace = if (snapshot.totalDistanceMeters > 0) {
+                        (snapshot.durationSeconds / (snapshot.totalDistanceMeters / 1000.0)).toInt()
+                    } else null
+
+                    val currentPoint = lastPoint?.let {
+                        mapOf(
+                            "latitude" to it.latitude,
+                            "longitude" to it.longitude,
+                            // API 호환: sequence는 1부터로 전달
+                            "sequence" to (it.sequence + 1),
+                            "t" to it.timestampSeconds,
+                            "acc" to it.accuracy
+                        )
+                    }
+
                     val data = mapOf(
                         "sessionId" to snapshot.sessionId,
                         "distanceMeters" to snapshot.totalDistanceMeters,
                         "durationSeconds" to snapshot.durationSeconds,
                         "heartRate" to lastPoint?.heartRate,
                         "paceSeconds" to lastPoint?.paceSeconds,
+                        "averagePaceSeconds" to avgPace,
+                        "calories" to snapshot.calories,
+                        "currentPoint" to currentPoint,
                         "timestamp" to System.currentTimeMillis()
                     )
                     try {
@@ -283,6 +301,9 @@ class RunningManager(private val context: Context) {
     fun pause() { paused = true; Log.d(TAG, "Paused") }
 
     fun resume() { paused = false; Log.d(TAG, "Resumed") }
+
+    fun isPaused(): Boolean = paused
+    fun isRunning(): Boolean = currentSession != null
 }
 
 

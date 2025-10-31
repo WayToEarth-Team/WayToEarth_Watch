@@ -21,27 +21,29 @@ fun RunningScreen(
     runningManager: RunningManager,
     onStop: () -> Unit
 ) {
-    var isRunning by remember { mutableStateOf(false) }
     var distance by remember { mutableStateOf(0) }
     var duration by remember { mutableStateOf(0) }
     var heartRate by remember { mutableStateOf<Int?>(null) }
     var pace by remember { mutableStateOf<Int?>(null) }
     var calories by remember { mutableStateOf(0) }
+    var isRunning by remember { mutableStateOf(false) }
+    var paused by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
     // 1초마다 UI 업데이트
-    LaunchedEffect(isRunning) {
-        if (isRunning) {
-            while (true) {
-                delay(1000)
-                runningManager.getCurrentSession()?.let { session ->
-                    distance = session.totalDistanceMeters
-                    duration = session.durationSeconds
-                    heartRate = session.routePoints.lastOrNull()?.heartRate
-                    pace = session.routePoints.lastOrNull()?.paceSeconds
-                    calories = session.calories
-                }
+    LaunchedEffect(true) {
+        while (true) {
+            delay(1000)
+            val session = runningManager.getCurrentSession()
+            isRunning = session != null
+            paused = runningManager.isPaused()
+            session?.let {
+                distance = it.totalDistanceMeters
+                duration = it.durationSeconds
+                heartRate = it.routePoints.lastOrNull()?.heartRate
+                pace = it.routePoints.lastOrNull()?.paceSeconds
+                calories = it.calories
             }
         }
     }
@@ -62,7 +64,6 @@ fun RunningScreen(
                     onClick = {
                         scope.launch {
                             runningManager.startRunning()
-                            isRunning = true
                         }
                     },
                     modifier = Modifier.fillMaxWidth(0.85f)
@@ -72,6 +73,15 @@ fun RunningScreen(
             } else {
                 // 러닝 진행 화면 - 가독성 향상
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (paused) {
+                        Text(
+                            text = "일시정지 중",
+                            color = Color(0xFFEF6C00),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                     // 거리 크게 + 단위 작게
                     val distanceKm = distance / 1000.0
                     val distanceText = buildAnnotatedString {
@@ -111,21 +121,37 @@ fun RunningScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 종료 버튼 크고 선명하게
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                isRunning = false
-                                onStop()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(0.85f),
-                        colors = ButtonDefaults.buttonColors(
-                            backgroundColor = Color(0xFFE53935),
-                            contentColor = Color.White
-                        )
+                    // 컨트롤: 일시정지/재개 + 종료
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("종료", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    if (paused) runningManager.resume() else runningManager.pause()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(0.4f),
+                            colors = ButtonDefaults.buttonColors(
+                                backgroundColor = if (paused) Color(0xFF43A047) else Color(0xFFFB8C00),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(if (paused) "재개" else "일시정지", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { scope.launch { onStop() } },
+                            modifier = Modifier.fillMaxWidth(0.85f),
+                            colors = ButtonDefaults.buttonColors(
+                                backgroundColor = Color(0xFFE53935),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("종료", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

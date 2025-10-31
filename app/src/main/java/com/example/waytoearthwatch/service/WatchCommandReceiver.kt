@@ -86,10 +86,28 @@ class WatchCommandReceiver : WearableListenerService() {
                 )
                 Log.d(tag, "STOP handled session=$sessionId")
 
-                // 최종 세션 전송
+                // 최종 세션 전송 (서버 스펙 변환)
                 if (session != null) {
-                    val ok = comm.sendRunningCompleteViaMessage(session)
-                    Log.d(tag, "Send complete via message: $ok")
+                    val avgPace = if (session.totalDistanceMeters > 0) {
+                        (session.durationSeconds / (session.totalDistanceMeters / 1000.0)).toInt()
+                    } else null
+                    val points = session.routePoints.map { p ->
+                        mapOf(
+                            "latitude" to p.latitude,
+                            "longitude" to p.longitude,
+                            "sequence" to (p.sequence + 1),
+                            "t" to p.timestampSeconds
+                        )
+                    }
+                    val ok = comm.sendRunningCompleteTransformed(
+                        sessionId = session.sessionId,
+                        distanceMeters = session.totalDistanceMeters,
+                        durationSeconds = session.durationSeconds,
+                        averagePaceSeconds = avgPace,
+                        calories = session.calories,
+                        routePoints = points
+                    )
+                    Log.d(tag, "Send complete (transformed): $ok")
                 }
             } catch (e: Exception) {
                 Log.e(tag, "Failed to handle STOP", e)

@@ -69,6 +69,29 @@ class PhoneCommunicationService(private val context: Context) {
         return sendMessageAll(PATH_RUNNING_COMPLETE, json.toByteArray())
     }
 
+    // 최종 세션 데이터 전송 (서버 스펙 변환 버전, MessageClient)
+    suspend fun sendRunningCompleteTransformed(
+        sessionId: String,
+        distanceMeters: Int,
+        durationSeconds: Int,
+        averagePaceSeconds: Int?,
+        calories: Int,
+        routePoints: List<Map<String, Any?>>
+    ): Boolean {
+        val payload = mapOf(
+            "sessionId" to sessionId,
+            "distanceMeters" to distanceMeters,
+            "durationSeconds" to durationSeconds,
+            "averagePaceSeconds" to averagePaceSeconds,
+            "calories" to calories,
+            "routePoints" to routePoints,
+            "endedAt" to System.currentTimeMillis()
+        )
+        val json = gson.toJson(payload)
+        Log.d(TAG, "sendRunningCompleteTransformed size=${json.length}")
+        return sendMessageAll(PATH_RUNNING_COMPLETE, json.toByteArray())
+    }
+
     // 실시간 업데이트 전송 (10초마다)
     suspend fun sendRealtimeUpdate(data: Map<String, Any?>): Boolean {
         val json = gson.toJson(data)
