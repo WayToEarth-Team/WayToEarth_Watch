@@ -96,7 +96,12 @@ class WatchCommandReceiver : WearableListenerService() {
                             "latitude" to p.latitude,
                             "longitude" to p.longitude,
                             "sequence" to (p.sequence + 1),
-                            "t" to p.timestampSeconds
+                            "timestampSeconds" to p.timestampSeconds,
+                            "heartRate" to p.heartRate,
+                            "paceSeconds" to p.paceSeconds,
+                            "altitude" to p.altitude,
+                            "accuracy" to p.accuracy,
+                            "cumulativeDistanceMeters" to p.cumulativeDistanceMeters
                         )
                     }
                     val ok = comm.sendRunningCompleteTransformed(
@@ -105,6 +110,8 @@ class WatchCommandReceiver : WearableListenerService() {
                         durationSeconds = session.durationSeconds,
                         averagePaceSeconds = avgPace,
                         calories = session.calories,
+                        averageHeartRate = session.averageHeartRate,
+                        maxHeartRate = session.maxHeartRate,
                         routePoints = points
                     )
                     Log.d(tag, "Send complete (transformed): $ok")

@@ -21,5 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "WayToEarth Watch"
 include(":app")
-include(":phone")
  

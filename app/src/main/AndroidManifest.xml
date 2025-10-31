@@ -61,10 +61,10 @@
             </intent-filter>
         </activity>
 
-        <!-- 워치 독립 실행 설정 (폰 앱 없이 작동 가능) -->
+        <!-- 워치 독립 실행 비활성화 (폰 앱 필수) -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
-            android:value="true" />
+            android:value="false" />
     </application>
 
 </manifest>

@@ -59,16 +59,27 @@ fun RunningScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (!isRunning) {
-                // 시작 화면
-                Button(
-                    onClick = {
-                        scope.launch {
-                            runningManager.startRunning()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(0.85f)
+                // 대기 화면 - 폰에서만 시작 가능
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Text("러닝 시작", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "📱",
+                        fontSize = 40.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "폰 앱에서",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colors.primary
+                    )
+                    Text(
+                        text = "러닝을 시작하세요",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f)
+                    )
                 }
             } else {
                 // 러닝 진행 화면 - 가독성 향상

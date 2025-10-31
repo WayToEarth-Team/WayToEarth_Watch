@@ -76,6 +76,8 @@ class PhoneCommunicationService(private val context: Context) {
         durationSeconds: Int,
         averagePaceSeconds: Int?,
         calories: Int,
+        averageHeartRate: Int?,
+        maxHeartRate: Int?,
         routePoints: List<Map<String, Any?>>
     ): Boolean {
         val payload = mapOf(
@@ -84,6 +86,8 @@ class PhoneCommunicationService(private val context: Context) {
             "durationSeconds" to durationSeconds,
             "averagePaceSeconds" to averagePaceSeconds,
             "calories" to calories,
+            "averageHeartRate" to averageHeartRate,
+            "maxHeartRate" to maxHeartRate,
             "routePoints" to routePoints,
             "endedAt" to System.currentTimeMillis()
         )
