@@ -1,4 +1,4 @@
-﻿package cloud.waytoearth.watch.manager
+package cloud.waytoearth.watch.manager
 
 import android.content.Context
 import android.location.Location
@@ -34,8 +34,8 @@ class RunningManager(private val context: Context) {
     private var realtimeJob: Job? = null
 
     /**
-     * ?щ떇 ?쒖옉
-     * @return ?몄뀡 ID
+     * 러닝 시작
+     * @return 세션 ID
      */
     suspend fun startRunning(): String {
         val sessionId = "watch-${UUID.randomUUID()}"
@@ -48,11 +48,11 @@ class RunningManager(private val context: Context) {
             routePoints = mutableListOf()
         )
 
-        // Health Services ?쒖옉
+        // Health Services 시작
         heartRateService.startExercise()
         Log.d(TAG, "Exercise start requested (HS)")
 
-        // HS 硫뷀듃由??섏쭛 ?쒖옉
+        // HS 메트릭 수집 시작
         val metricsService = HealthMetricsService(context)
         scope.launch {
             metricsService.metricsFlow().collect { m ->
@@ -72,7 +72,7 @@ class RunningManager(private val context: Context) {
             }
         }
 
-        // ?꾩튂 ?섏쭛 ?쒖옉 (1珥덈쭏??
+        // 위치 수집 시작 (1초마다)
         scope.launch {
             locationService.getLocationUpdates().collect { location ->
                 onLocationUpdate(location)
@@ -83,7 +83,7 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * ?몃? ?몄뀡 ID濡??щ떇 ?쒖옉 (??紐낅졊 ???
+     * 외부 세션 ID로 러닝 시작 (폰 명령 시)
      */
     suspend fun startRunning(sessionId: String, runningType: String? = null) {
         val startTime = System.currentTimeMillis()
@@ -104,7 +104,7 @@ class RunningManager(private val context: Context) {
                 if (hr != null) Log.v(TAG, "HR update bpm=$hr")
             }
         }
-        // HS 硫뷀듃由??섏쭛 ?쒖옉 (?щ컯/嫄곕━/?띾룄/?섏씠??
+        // HS 메트릭 수집 시작 (심박/거리/페이스/속도)
         val metricsService2 = HealthMetricsService(context)
         scope.launch {
             metricsService2.metricsFlow().collect { m ->
@@ -129,18 +129,18 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * ?꾩튂 ?낅뜲?댄듃 泥섎━ (1珥덈쭏???몄텧??
+     * 위치 업데이트 처리 (1초마다 수신됨)
      */
     private fun onLocationUpdate(location: Location) {
         val session = currentSession ?: return
         val prevSize = session.routePoints.size
 
-        
+
         if (paused) {
             lastLocation = location
             return
         }
-// 嫄곕━ 怨꾩궛: HS 嫄곕━ ?곗꽑, ?꾨땲硫?GPS 利앸텇
+        // 거리 계산: HS 거리 우선, 아니면 GPS 증분
         if (!useHsDistance) {
             val distanceIncrement = if (lastLocation != null) {
                 DistanceCalculator.calculateDistance(
@@ -155,18 +155,18 @@ class RunningManager(private val context: Context) {
             session.totalDistanceMeters += distanceIncrement.toInt()
         }
 
-        // 寃쎄낵 ?쒓컙 怨꾩궛 (珥?
+        // 경과 시간 계산 (초)
         val elapsedSeconds = ((System.currentTimeMillis() - session.startTime) / 1000).toInt()
         session.durationSeconds = elapsedSeconds
 
-        // 利됱떆 ?섏씠??怨꾩궛 (理쒓렐 100m 湲곗?)
+        // 즉시 페이스 계산 (최근 100m 기준)
         val instantPace = when {
             hsPaceSeconds != null -> hsPaceSeconds
             hsSpeedMps != null && hsSpeedMps!! > 0.0 -> (1000.0 / hsSpeedMps!!).toInt()
             else -> calculateInstantPace(session.routePoints)
         }
 
-        // RoutePoint ?앹꽦
+        // RoutePoint 생성
         val routePoint = RoutePoint(
             latitude = location.latitude,
             longitude = location.longitude,
@@ -188,12 +188,12 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * 利됱떆 ?섏씠??怨꾩궛 (理쒓렐 100m 湲곗?)
+     * 즉시 페이스 계산 (최근 100m 기준)
      */
     private fun calculateInstantPace(points: List<RoutePoint>): Int? {
         if (points.size < 2) return null
 
-        // 理쒓렐 100m 援ш컙 李얘린
+        // 최근 100m 구간 찾기
         val currentDistance = points.last().cumulativeDistanceMeters
         val targetDistance = currentDistance - 100
 
@@ -208,28 +208,28 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * ?щ떇 醫낅즺 諛??곗씠??諛섑솚
+     * 러닝 종료 및 데이터 반환
      * @return RunningSession
      */
     suspend fun stopRunning(): RunningSession? {
         val session = currentSession ?: return null
 
-        // Health Services 醫낅즺
+        // Health Services 종료
         heartRateService.endExercise()
         Log.d(TAG, "Exercise end requested (HS)")
 
-        // ?щ컯???듦퀎 怨꾩궛
+        // 심박수 통계 계산
         val heartRates = session.routePoints.mapNotNull { it.heartRate }
         session.averageHeartRate = HeartRateCalculator.calculateAverage(heartRates)
         session.maxHeartRate = HeartRateCalculator.calculateMax(heartRates)
 
-        // ?됯퇏 ?섏씠??怨꾩궛
+        // 평균 페이스 계산
         val averagePaceSeconds = DistanceCalculator.calculatePace(
             session.totalDistanceMeters,
             session.durationSeconds
         )
 
-        // 移쇰줈由?怨꾩궛 (媛꾨떒??怨듭떇: 1km??60kcal)
+        // 칼로리 계산 (간단한 공식: 1km당 60kcal)
         session.calories = (session.totalDistanceMeters / 1000.0 * 60).toInt()
 
         currentSession = null
@@ -241,7 +241,7 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * ?ㅼ떆媛??숆린???쒖옉 (10珥?二쇨린)
+     * 실시간 동기화 시작 (10초 주기)
      */
     fun startRealtimeSync(comm: PhoneCommunicationService) {
         realtimeJob?.cancel()
@@ -296,7 +296,7 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * ?꾩옱 ?몄뀡 ?뺣낫 媛?몄삤湲?(?ㅼ떆媛?UI ?낅뜲?댄듃??
+     * 현재 세션 스냅샷 가져오기 (실시간 UI 업데이트용)
      */
     fun getCurrentSession(): RunningSession? = currentSession
     fun pause() { paused = true; Log.d(TAG, "Paused") }
@@ -306,5 +306,4 @@ class RunningManager(private val context: Context) {
     fun isPaused(): Boolean = paused
     fun isRunning(): Boolean = currentSession != null
 }
-
 
