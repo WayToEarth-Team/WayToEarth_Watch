@@ -17,9 +17,13 @@ class PhoneCommunicationService(private val context: Context) {
     companion object {
         const val PATH_COMMAND_START = "/waytoearth/command/start"
         const val PATH_COMMAND_STOP = "/waytoearth/command/stop"
+        const val PATH_COMMAND_PAUSE = "/waytoearth/command/pause"
+        const val PATH_COMMAND_RESUME = "/waytoearth/command/resume"
 
         const val PATH_RESPONSE_STARTED = "/waytoearth/response/started"
         const val PATH_RESPONSE_STOPPED = "/waytoearth/response/stopped"
+        const val PATH_RESPONSE_PAUSED = "/waytoearth/response/paused"
+        const val PATH_RESPONSE_RESUMED = "/waytoearth/response/resumed"
 
         const val PATH_REALTIME_UPDATE = "/waytoearth/realtime/update"
         const val PATH_RUNNING_COMPLETE = "/waytoearth/running/complete"
@@ -83,5 +87,17 @@ class PhoneCommunicationService(private val context: Context) {
         val json = gson.toJson(data)
         Log.d(TAG, "sendResponseStopped payload=$json")
         return sendMessageAll(PATH_RESPONSE_STOPPED, json.toByteArray())
+    }
+
+    suspend fun sendResponsePaused(data: Map<String, Any?>): Boolean {
+        val json = gson.toJson(data)
+        Log.d(TAG, "sendResponsePaused payload=$json")
+        return sendMessageAll(PATH_RESPONSE_PAUSED, json.toByteArray())
+    }
+
+    suspend fun sendResponseResumed(data: Map<String, Any?>): Boolean {
+        val json = gson.toJson(data)
+        Log.d(TAG, "sendResponseResumed payload=$json")
+        return sendMessageAll(PATH_RESPONSE_RESUMED, json.toByteArray())
     }
 }

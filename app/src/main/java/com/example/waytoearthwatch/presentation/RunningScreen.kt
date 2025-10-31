@@ -4,7 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
@@ -22,6 +26,7 @@ fun RunningScreen(
     var duration by remember { mutableStateOf(0) }
     var heartRate by remember { mutableStateOf<Int?>(null) }
     var pace by remember { mutableStateOf<Int?>(null) }
+    var calories by remember { mutableStateOf(0) }
 
     val scope = rememberCoroutineScope()
 
@@ -35,6 +40,7 @@ fun RunningScreen(
                     duration = session.durationSeconds
                     heartRate = session.routePoints.lastOrNull()?.heartRate
                     pace = session.routePoints.lastOrNull()?.paceSeconds
+                    calories = session.calories
                 }
             }
         }
@@ -58,47 +64,54 @@ fun RunningScreen(
                             runningManager.startRunning()
                             isRunning = true
                         }
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth(0.85f)
                 ) {
-                    Text("러닝 시작")
+                    Text("러닝 시작", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             } else {
-                // 러닝 중 화면
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // 거리 표시
-                    Text(
-                        text = String.format("%.2f km", distance / 1000.0),
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                // 러닝 진행 화면 - 가독성 향상
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // 거리 크게 + 단위 작게
+                    val distanceKm = distance / 1000.0
+                    val distanceText = buildAnnotatedString {
+                        withStyle(
+                            SpanStyle(
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colors.primary
+                            )
+                        ) {
+                            append(String.format("%.2f", distanceKm))
+                        }
+                        append(" ")
+                        withStyle(
+                            SpanStyle(
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f)
+                            )
+                        ) {
+                            append("km")
+                        }
+                    }
+                    Text(distanceText)
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // 시간 표시
-                    Text(
-                        text = formatDuration(duration),
-                        fontSize = 18.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // 심박수 표시
-                    heartRate?.let {
-                        Text(text = "$it BPM", fontSize = 16.sp)
+                    // 2x2 메트릭: 시간 / 심박 / 페이스 / 칼로리
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Metric(label = "시간", value = formatDuration(duration))
+                        Metric(label = "심박", value = heartRate?.let { "$it BPM" } ?: "-")
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Metric(label = "페이스", value = pace?.let { formatPace(it) } ?: "-")
+                        Metric(label = "칼로리", value = String.format("%d kcal", calories))
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    // 페이스 표시
-                    pace?.let {
-                        Text(text = formatPace(it), fontSize = 16.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 종료 버튼
+                    // 종료 버튼 크고 선명하게
                     Button(
                         onClick = {
                             scope.launch {
@@ -106,11 +119,13 @@ fun RunningScreen(
                                 onStop()
                             }
                         },
+                        modifier = Modifier.fillMaxWidth(0.85f),
                         colors = ButtonDefaults.buttonColors(
-                            backgroundColor = androidx.compose.ui.graphics.Color.Red
+                            backgroundColor = Color(0xFFE53935),
+                            contentColor = Color.White
                         )
                     ) {
-                        Text("종료")
+                        Text("종료", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -118,7 +133,24 @@ fun RunningScreen(
     }
 }
 
-// 시간 포맷팅 (초 → HH:MM:SS)
+@Composable
+private fun Metric(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.caption2,
+            color = Color.Black.copy(alpha = 0.7f)
+        )
+        Text(
+            text = value,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.Black
+        )
+    }
+}
+
+// 시간 포맷팅(HH:MM:SS)
 private fun formatDuration(seconds: Int): String {
     val hours = seconds / 3600
     val minutes = (seconds % 3600) / 60
@@ -126,7 +158,7 @@ private fun formatDuration(seconds: Int): String {
     return String.format("%02d:%02d:%02d", hours, minutes, secs)
 }
 
-// 페이스 포맷팅 (초/km → MM:SS)
+// 페이스 포맷팅(분'초")
 private fun formatPace(paceSeconds: Int): String {
     val minutes = paceSeconds / 60
     val seconds = paceSeconds % 60

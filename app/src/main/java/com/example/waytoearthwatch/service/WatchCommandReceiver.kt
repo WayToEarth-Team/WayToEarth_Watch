@@ -28,6 +28,8 @@ class WatchCommandReceiver : WearableListenerService() {
         when (messageEvent.path) {
             PhoneCommunicationService.PATH_COMMAND_START -> handleStart(messageEvent)
             PhoneCommunicationService.PATH_COMMAND_STOP -> handleStop(messageEvent)
+            PhoneCommunicationService.PATH_COMMAND_PAUSE -> handlePause(messageEvent)
+            PhoneCommunicationService.PATH_COMMAND_RESUME -> handleResume(messageEvent)
             else -> Log.w(tag, "Unknown path: ${messageEvent.path}")
         }
     }
@@ -97,6 +99,36 @@ class WatchCommandReceiver : WearableListenerService() {
                         "error" to (e.message ?: "unknown")
                     )
                 )
+            }
+        }
+    }
+
+    private fun handlePause(messageEvent: MessageEvent) {
+        scope.launch {
+            try {
+                val json = JSONObject(String(messageEvent.data))
+                val sessionId = json.optString("sessionId")
+                runningManager.pause()
+                comm.sendResponsePaused(mapOf("success" to true, "sessionId" to sessionId))
+                Log.d(tag, "PAUSE handled session=$sessionId")
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to handle PAUSE", e)
+                comm.sendResponsePaused(mapOf("success" to false, "error" to (e.message ?: "unknown")))
+            }
+        }
+    }
+
+    private fun handleResume(messageEvent: MessageEvent) {
+        scope.launch {
+            try {
+                val json = JSONObject(String(messageEvent.data))
+                val sessionId = json.optString("sessionId")
+                runningManager.resume()
+                comm.sendResponseResumed(mapOf("success" to true, "sessionId" to sessionId))
+                Log.d(tag, "RESUME handled session=$sessionId")
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to handle RESUME", e)
+                comm.sendResponseResumed(mapOf("success" to false, "error" to (e.message ?: "unknown")))
             }
         }
     }

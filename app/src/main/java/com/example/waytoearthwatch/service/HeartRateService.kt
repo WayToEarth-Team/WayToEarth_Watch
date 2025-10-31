@@ -45,6 +45,12 @@ class HeartRateService(private val context: Context) {
                     callbackInterface.classLoader,
                     arrayOf(callbackInterface)
                 ) { _, method, args ->
+                    // Object 기본 메서드 처리
+                    when (method.name) {
+                        "hashCode" -> return@newProxyInstance System.identityHashCode(this)
+                        "equals" -> return@newProxyInstance (args?.getOrNull(0) === this)
+                        "toString" -> return@newProxyInstance "ExerciseUpdateCallbackProxy@" + Integer.toHexString(System.identityHashCode(this))
+                    }
                     if (method.name.contains("onExerciseUpdateReceived") && args != null && args.isNotEmpty()) {
                         val update = args[0]
                         try {
@@ -128,7 +134,7 @@ class HeartRateService(private val context: Context) {
                 exerciseType = ExerciseType.RUNNING,
                 dataTypes = setOf(DataType.HEART_RATE_BPM),
                 isAutoPauseAndResumeEnabled = false,
-                isGpsEnabled = false
+                isGpsEnabled = true
             )
             // 일부 버전에서 메서드 시그니처 차이를 회피하기 위해 리플렉션 사용
             val method = exerciseClient.javaClass.methods.firstOrNull { it.name == "startExercise" }

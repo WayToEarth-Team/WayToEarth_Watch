@@ -1,4 +1,4 @@
-package com.example.waytoearthwatch.manager
+﻿package com.example.waytoearthwatch.manager
 
 import android.content.Context
 import android.location.Location
@@ -6,6 +6,7 @@ import android.util.Log
 import com.example.waytoearthwatch.data.RoutePoint
 import com.example.waytoearthwatch.data.RunningSession
 import com.example.waytoearthwatch.service.HeartRateService
+import com.example.waytoearthwatch.service.HealthMetricsService
 import com.example.waytoearthwatch.service.LocationService
 import com.example.waytoearthwatch.utils.DistanceCalculator
 import com.example.waytoearthwatch.utils.HeartRateCalculator
@@ -22,13 +23,18 @@ class RunningManager(private val context: Context) {
     private var currentSession: RunningSession? = null
     private var lastLocation: Location? = null
     private var currentHeartRate: Int? = null
+    private var hsDistanceMeters: Int? = null
+    private var hsPaceSeconds: Int? = null
+    private var hsSpeedMps: Double? = null
+    private var useHsDistance: Boolean = false
+    private var paused: Boolean = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var realtimeJob: Job? = null
 
     /**
-     * 러닝 시작
-     * @return 세션 ID
+     * ?щ떇 ?쒖옉
+     * @return ?몄뀡 ID
      */
     suspend fun startRunning(): String {
         val sessionId = "watch-${UUID.randomUUID()}"
@@ -41,19 +47,31 @@ class RunningManager(private val context: Context) {
             routePoints = mutableListOf()
         )
 
-        // Health Services 시작
+        // Health Services ?쒖옉
         heartRateService.startExercise()
         Log.d(TAG, "Exercise start requested (HS)")
 
-        // 심박수 수집 시작
+        // HS 硫뷀듃由??섏쭛 ?쒖옉
+        val metricsService = HealthMetricsService(context)
         scope.launch {
-            heartRateService.getHeartRateUpdates().collect { hr ->
-                currentHeartRate = hr
-                if (hr != null) Log.v(TAG, "HR update bpm=$hr")
+            metricsService.metricsFlow().collect { m ->
+                m.heartRate?.let {
+                    currentHeartRate = it
+                    Log.v(TAG, "HS HR bpm=$it")
+                }
+                m.distanceMeters?.let {
+                    hsDistanceMeters = it
+                    useHsDistance = true
+                    currentSession?.totalDistanceMeters = it
+                    Log.v(TAG, "HS Distance=${it}m")
+                }
+                hsPaceSeconds = m.paceSecondsPerKm
+                m.paceSecondsPerKm?.let { Log.v(TAG, "HS Pace=${it}s/km") }
+                m.speedMps?.let { hsSpeedMps = it; Log.v(TAG, "HS Speed=${String.format("%.2f", it)} m/s") }
             }
         }
 
-        // 위치 수집 시작 (1초마다)
+        // ?꾩튂 ?섏쭛 ?쒖옉 (1珥덈쭏??
         scope.launch {
             locationService.getLocationUpdates().collect { location ->
                 onLocationUpdate(location)
@@ -64,7 +82,7 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * 외부 세션 ID로 러닝 시작 (폰 명령 대응)
+     * ?몃? ?몄뀡 ID濡??щ떇 ?쒖옉 (??紐낅졊 ???
      */
     suspend fun startRunning(sessionId: String, runningType: String? = null) {
         val startTime = System.currentTimeMillis()
@@ -85,6 +103,22 @@ class RunningManager(private val context: Context) {
                 if (hr != null) Log.v(TAG, "HR update bpm=$hr")
             }
         }
+        // HS 硫뷀듃由??섏쭛 ?쒖옉 (?щ컯/嫄곕━/?띾룄/?섏씠??
+        val metricsService2 = HealthMetricsService(context)
+        scope.launch {
+            metricsService2.metricsFlow().collect { m ->
+                m.heartRate?.let { currentHeartRate = it; Log.v(TAG, "HS HR bpm=$it") }
+                m.distanceMeters?.let {
+                    hsDistanceMeters = it
+                    useHsDistance = true
+                    currentSession?.totalDistanceMeters = it
+                    Log.v(TAG, "HS Distance=${it}m")
+                }
+                hsPaceSeconds = m.paceSecondsPerKm
+                m.paceSecondsPerKm?.let { Log.v(TAG, "HS Pace=${it}s/km") }
+                m.speedMps?.let { hsSpeedMps = it; Log.v(TAG, "HS Speed=${String.format("%.2f", it)} m/s") }
+            }
+        }
 
         scope.launch {
             locationService.getLocationUpdates().collect { location ->
@@ -94,34 +128,44 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * 위치 업데이트 처리 (1초마다 호출됨)
+     * ?꾩튂 ?낅뜲?댄듃 泥섎━ (1珥덈쭏???몄텧??
      */
     private fun onLocationUpdate(location: Location) {
         val session = currentSession ?: return
         val prevSize = session.routePoints.size
 
-        // 거리 계산
-        val distanceIncrement = if (lastLocation != null) {
-            DistanceCalculator.calculateDistance(
-                lastLocation!!.latitude,
-                lastLocation!!.longitude,
-                location.latitude,
-                location.longitude
-            )
-        } else {
-            0.0
+        
+        if (paused) {
+            lastLocation = location
+            return
+        }
+// 嫄곕━ 怨꾩궛: HS 嫄곕━ ?곗꽑, ?꾨땲硫?GPS 利앸텇
+        if (!useHsDistance) {
+            val distanceIncrement = if (lastLocation != null) {
+                DistanceCalculator.calculateDistance(
+                    lastLocation!!.latitude,
+                    lastLocation!!.longitude,
+                    location.latitude,
+                    location.longitude
+                )
+            } else {
+                0.0
+            }
+            session.totalDistanceMeters += distanceIncrement.toInt()
         }
 
-        session.totalDistanceMeters += distanceIncrement.toInt()
-
-        // 경과 시간 계산 (초)
+        // 寃쎄낵 ?쒓컙 怨꾩궛 (珥?
         val elapsedSeconds = ((System.currentTimeMillis() - session.startTime) / 1000).toInt()
         session.durationSeconds = elapsedSeconds
 
-        // 즉시 페이스 계산 (최근 100m 기준)
-        val instantPace = calculateInstantPace(session.routePoints)
+        // 利됱떆 ?섏씠??怨꾩궛 (理쒓렐 100m 湲곗?)
+        val instantPace = when {
+            hsPaceSeconds != null -> hsPaceSeconds
+            hsSpeedMps != null && hsSpeedMps!! > 0.0 -> (1000.0 / hsSpeedMps!!).toInt()
+            else -> calculateInstantPace(session.routePoints)
+        }
 
-        // RoutePoint 생성
+        // RoutePoint ?앹꽦
         val routePoint = RoutePoint(
             latitude = location.latitude,
             longitude = location.longitude,
@@ -135,6 +179,7 @@ class RunningManager(private val context: Context) {
         )
 
         session.routePoints.add(routePoint)
+        session.calories = (session.totalDistanceMeters / 1000.0 * 60).toInt()
         if ((prevSize + 1) % 10 == 0) {
             Log.d(TAG, "RoutePoint added count=${prevSize + 1} dist=${session.totalDistanceMeters}m dur=${session.durationSeconds}s")
         }
@@ -142,12 +187,12 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * 즉시 페이스 계산 (최근 100m 기준)
+     * 利됱떆 ?섏씠??怨꾩궛 (理쒓렐 100m 湲곗?)
      */
     private fun calculateInstantPace(points: List<RoutePoint>): Int? {
         if (points.size < 2) return null
 
-        // 최근 100m 구간 찾기
+        // 理쒓렐 100m 援ш컙 李얘린
         val currentDistance = points.last().cumulativeDistanceMeters
         val targetDistance = currentDistance - 100
 
@@ -162,39 +207,40 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * 러닝 종료 및 데이터 반환
+     * ?щ떇 醫낅즺 諛??곗씠??諛섑솚
      * @return RunningSession
      */
     suspend fun stopRunning(): RunningSession? {
         val session = currentSession ?: return null
 
-        // Health Services 종료
+        // Health Services 醫낅즺
         heartRateService.endExercise()
         Log.d(TAG, "Exercise end requested (HS)")
 
-        // 심박수 통계 계산
+        // ?щ컯???듦퀎 怨꾩궛
         val heartRates = session.routePoints.mapNotNull { it.heartRate }
         session.averageHeartRate = HeartRateCalculator.calculateAverage(heartRates)
         session.maxHeartRate = HeartRateCalculator.calculateMax(heartRates)
 
-        // 평균 페이스 계산
+        // ?됯퇏 ?섏씠??怨꾩궛
         val averagePaceSeconds = DistanceCalculator.calculatePace(
             session.totalDistanceMeters,
             session.durationSeconds
         )
 
-        // 칼로리 계산 (간단한 공식: 1km당 60kcal)
+        // 移쇰줈由?怨꾩궛 (媛꾨떒??怨듭떇: 1km??60kcal)
         session.calories = (session.totalDistanceMeters / 1000.0 * 60).toInt()
 
         currentSession = null
         lastLocation = null
         currentHeartRate = null
+        paused = false
 
         return session
     }
 
     /**
-     * 실시간 동기화 시작 (10초 주기)
+     * ?ㅼ떆媛??숆린???쒖옉 (10珥?二쇨린)
      */
     fun startRealtimeSync(comm: com.example.waytoearthwatch.service.PhoneCommunicationService) {
         realtimeJob?.cancel()
@@ -231,7 +277,12 @@ class RunningManager(private val context: Context) {
     }
 
     /**
-     * 현재 세션 정보 가져오기 (실시간 UI 업데이트용)
+     * ?꾩옱 ?몄뀡 ?뺣낫 媛?몄삤湲?(?ㅼ떆媛?UI ?낅뜲?댄듃??
      */
     fun getCurrentSession(): RunningSession? = currentSession
+    fun pause() { paused = true; Log.d(TAG, "Paused") }
+
+    fun resume() { paused = false; Log.d(TAG, "Resumed") }
 }
+
+
