@@ -14,12 +14,15 @@ Wear OS 기반 러닝 트래킹 워치 애플리케이션으로, 실시간 GPS, 
 - **거리 계산**: Health Services 거리 또는 GPS 기반 거리 계산
 - **페이스 계산**: 최근 100m 기준 즉시 페이스 계산
 - **칼로리 계산**: 거리 기반 칼로리 소모량 추정 (1km당 60kcal)
+- **일시정지/재개**: 러닝 중 일시정지 및 재개 기능
+- **실시간 UI 업데이트**: StateFlow 기반 반응형 UI로 데이터 자동 반영
 
 ### 2. 폰 앱과의 실시간 통신
 - **명령 수신**: 폰에서 시작/정지/일시정지/재개 명령 수신
 - **실시간 업데이트**: 10초마다 현재 러닝 상태 전송
 - **최종 세션 전송**: 러닝 종료 시 전체 세션 데이터 전송
 - **상태 응답**: 각 명령에 대한 성공/실패 응답 전송
+- **워치 주도 상태 알림**: 워치에서 직접 일시정지/재개 시 폰으로 상태 알림
 
 ### 3. 데이터 동기화
 - **Message API**: 실시간 명령 및 업데이트 전송
@@ -33,11 +36,11 @@ Wear OS 기반 러닝 트래킹 워치 애플리케이션으로, 실시간 GPS, 
 ├─────────────────────────────────────────────────┤
 │  Presentation Layer                              │
 │  ├─ MainActivity (Compose)                       │
-│  ├─ RunningScreen (UI)                           │
+│  ├─ RunningScreen (UI - StateFlow 구독)          │
 │  └─ PermissionScreen (권한 요청)                  │
 ├─────────────────────────────────────────────────┤
 │  Manager Layer                                   │
-│  └─ RunningManager (세션 관리, 데이터 통합)       │
+│  └─ RunningManager (세션 관리, StateFlow 상태)    │
 ├─────────────────────────────────────────────────┤
 │  Service Layer                                   │
 │  ├─ PhoneCommunicationService (폰 통신)          │
@@ -75,8 +78,10 @@ Wear OS 기반 러닝 트래킹 워치 애플리케이션으로, 실시간 GPS, 
 |------|------|---------|
 | `/waytoearth/response/started` | 시작 완료 | `{success, sessionId, timestamp}` |
 | `/waytoearth/response/stopped` | 종료 완료 | `{success, sessionId}` |
-| `/waytoearth/response/paused` | 일시정지 완료 | `{success, sessionId}` |
-| `/waytoearth/response/resumed` | 재개 완료 | `{success, sessionId}` |
+| `/waytoearth/response/paused` | 일시정지 완료 (명령 응답 또는 워치 주도) | `{success, sessionId, fromWatch?}` |
+| `/waytoearth/response/resumed` | 재개 완료 (명령 응답 또는 워치 주도) | `{success, sessionId, fromWatch?}` |
+
+**참고**: `fromWatch: true`가 포함된 경우 워치에서 사용자가 직접 일시정지/재개 버튼을 눌렀음을 의미합니다.
 
 #### 실시간 업데이트 (워치 → 폰, 10초마다)
 Path: `/waytoearth/realtime/update`
@@ -169,11 +174,17 @@ Path: `/waytoearth/running/complete`
 - `startRealtimeSync()`: 10초마다 폰으로 데이터 전송
 - `onLocationUpdate()`: GPS 위치 업데이트 처리 (1초마다)
 
+**상태 관리 (StateFlow)**:
+- `runningState`: UI가 구독하는 실시간 상태 스트림
+- `RunningState`: 현재 세션, 일시정지 여부, 실행 여부를 담는 데이터 클래스
+- `updateRunningState()`: 상태 변경 시 자동으로 UI 업데이트 트리거
+
 **데이터 수집**:
 - GPS 위치: 1초마다 수집
 - 심박수: Health Services를 통해 실시간 수집
 - 거리: Health Services 거리 우선, GPS 증분 계산
 - 페이스: 최근 100m 기준 즉시 페이스 계산
+- 일시정지 시 위치 업데이트는 수신하지만 거리 계산 중지
 
 ### LocationService
 GPS 위치 추적을 담당하는 서비스입니다.
@@ -243,6 +254,21 @@ data class RoutePoint(
 )
 ```
 
+### RunningState
+UI 업데이트를 위한 실시간 상태 모델입니다.
+
+**위치**: `app/src/main/java/cloud/waytoearth/watch/manager/RunningManager.kt`
+
+```kotlin
+data class RunningState(
+    val session: RunningSession? = null,  // 현재 러닝 세션 (null이면 미실행)
+    val isPaused: Boolean = false,        // 일시정지 여부
+    val isRunning: Boolean = false        // 러닝 실행 여부
+)
+```
+
+이 모델은 `StateFlow<RunningState>`로 UI에 제공되어 Compose가 자동으로 리컴포지션을 수행합니다.
+
 ## 기술 스택
 
 ### Core
@@ -259,6 +285,7 @@ data class RoutePoint(
 
 ### Libraries
 - `kotlinx-coroutines-android`: 비동기 처리
+- `kotlinx-coroutines-flow`: StateFlow/Flow 기반 반응형 상태 관리
 - `gson`: JSON 직렬화/역직렬화
 - `accompanist-permissions`: 런타임 권한 관리
 
@@ -302,6 +329,8 @@ data class RoutePoint(
        when (messageEvent.path) {
            "/waytoearth/response/started" -> handleStarted()
            "/waytoearth/response/stopped" -> handleStopped()
+           "/waytoearth/response/paused" -> handlePaused()
+           "/waytoearth/response/resumed" -> handleResumed()
            "/waytoearth/realtime/update" -> handleRealtimeUpdate()
            "/waytoearth/running/complete" -> handleRunningComplete()
        }
@@ -349,6 +378,32 @@ data class RoutePoint(
 워치 → [STOPPED 응답] → 폰 앱
 워치 → [최종 세션 데이터] → 폰 앱
 워치 → GPS/심박수 추적 중지
+```
+
+### 일시정지/재개 (폰 주도)
+```
+폰 앱 → [PAUSE 명령] → 워치
+워치 → [RunningManager.pause()] → 거리 계산 중지, StateFlow 업데이트
+워치 → [PAUSED 응답] → 폰 앱
+워치 UI → 자동 업데이트 (일시정지 상태 표시)
+
+폰 앱 → [RESUME 명령] → 워치
+워치 → [RunningManager.resume()] → 거리 계산 재개, StateFlow 업데이트
+워치 → [RESUMED 응답] → 폰 앱
+워치 UI → 자동 업데이트 (러닝 중 상태 표시)
+```
+
+### 일시정지/재개 (워치 주도)
+```
+워치 UI → [일시정지 버튼 클릭]
+워치 → [RunningManager.pause()] → StateFlow 업데이트
+워치 → [PAUSED 응답 with fromWatch=true] → 폰 앱
+워치 UI → 자동 업데이트 (일시정지 상태 표시)
+
+워치 UI → [재개 버튼 클릭]
+워치 → [RunningManager.resume()] → StateFlow 업데이트
+워치 → [RESUMED 응답 with fromWatch=true] → 폰 앱
+워치 UI → 자동 업데이트 (러닝 중 상태 표시)
 ```
 
 ## 테스팅
