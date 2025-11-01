@@ -15,6 +15,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.*
 
+data class RunningState(
+    val session: RunningSession? = null,
+    val isPaused: Boolean = false,
+    val isRunning: Boolean = false
+)
+
 class RunningManager(private val context: Context) {
 
     private val TAG = "RunningManager"
@@ -33,6 +39,10 @@ class RunningManager(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var realtimeJob: Job? = null
 
+    // StateFlow로 상태 관리 - UI가 구독할 수 있도록
+    private val _runningState = MutableStateFlow(RunningState())
+    val runningState: StateFlow<RunningState> = _runningState.asStateFlow()
+
     /**
      * 러닝 시작
      * @return 세션 ID
@@ -47,6 +57,9 @@ class RunningManager(private val context: Context) {
             startTime = startTime,
             routePoints = mutableListOf()
         )
+
+        // StateFlow 업데이트
+        updateRunningState()
 
         // Health Services 시작
         heartRateService.startExercise()
@@ -94,6 +107,9 @@ class RunningManager(private val context: Context) {
             startTime = startTime,
             routePoints = mutableListOf()
         )
+
+        // StateFlow 업데이트
+        updateRunningState()
 
         heartRateService.startExercise()
         Log.d(TAG, "Exercise start requested (HS)")
@@ -185,6 +201,9 @@ class RunningManager(private val context: Context) {
             Log.d(TAG, "RoutePoint added count=${prevSize + 1} dist=${session.totalDistanceMeters}m dur=${session.durationSeconds}s")
         }
         lastLocation = location
+
+        // StateFlow 업데이트
+        updateRunningState()
     }
 
     /**
@@ -236,6 +255,9 @@ class RunningManager(private val context: Context) {
         lastLocation = null
         currentHeartRate = null
         paused = false
+
+        // StateFlow 업데이트
+        updateRunningState()
 
         return session
     }
@@ -299,11 +321,30 @@ class RunningManager(private val context: Context) {
      * 현재 세션 스냅샷 가져오기 (실시간 UI 업데이트용)
      */
     fun getCurrentSession(): RunningSession? = currentSession
-    fun pause() { paused = true; Log.d(TAG, "Paused") }
+    fun pause() {
+        paused = true
+        Log.d(TAG, "Paused")
+        updateRunningState()
+    }
 
-    fun resume() { paused = false; Log.d(TAG, "Resumed") }
+    fun resume() {
+        paused = false
+        Log.d(TAG, "Resumed")
+        updateRunningState()
+    }
 
     fun isPaused(): Boolean = paused
     fun isRunning(): Boolean = currentSession != null
+
+    /**
+     * StateFlow 업데이트 헬퍼 함수
+     */
+    private fun updateRunningState() {
+        _runningState.value = RunningState(
+            session = currentSession,
+            isPaused = paused,
+            isRunning = currentSession != null
+        )
+    }
 }
 
