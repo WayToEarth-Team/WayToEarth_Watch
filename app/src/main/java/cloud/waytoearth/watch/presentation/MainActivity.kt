@@ -43,6 +43,21 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    },
+                    onPauseToggle = { isPaused ->
+                        scope.launch {
+                            // 워치에서 일시정지/재개 버튼을 누르면 폰에 알림
+                            val sessionId = runningManager.getCurrentSession()?.sessionId ?: return@launch
+                            if (isPaused) {
+                                phoneCommunication.sendResponsePaused(
+                                    mapOf("sessionId" to sessionId, "fromWatch" to true)
+                                )
+                            } else {
+                                phoneCommunication.sendResponseResumed(
+                                    mapOf("sessionId" to sessionId, "fromWatch" to true)
+                                )
+                            }
+                        }
                     }
                 )
             }

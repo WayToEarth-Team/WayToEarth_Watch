@@ -19,34 +19,21 @@ import kotlinx.coroutines.launch
 @Composable
 fun RunningScreen(
     runningManager: RunningManager,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onPauseToggle: (Boolean) -> Unit = {}
 ) {
-    var distance by remember { mutableStateOf(0) }
-    var duration by remember { mutableStateOf(0) }
-    var heartRate by remember { mutableStateOf<Int?>(null) }
-    var pace by remember { mutableStateOf<Int?>(null) }
-    var calories by remember { mutableStateOf(0) }
-    var isRunning by remember { mutableStateOf(false) }
-    var paused by remember { mutableStateOf(false) }
-
     val scope = rememberCoroutineScope()
 
-    // 1초마다 UI 업데이트
-    LaunchedEffect(true) {
-        while (true) {
-            delay(1000)
-            val session = runningManager.getCurrentSession()
-            isRunning = session != null
-            paused = runningManager.isPaused()
-            session?.let {
-                distance = it.totalDistanceMeters
-                duration = it.durationSeconds
-                heartRate = it.routePoints.lastOrNull()?.heartRate
-                pace = it.routePoints.lastOrNull()?.paceSeconds
-                calories = it.calories
-            }
-        }
-    }
+    // StateFlow를 구독하여 UI 업데이트
+    val runningState by runningManager.runningState.collectAsState()
+
+    val distance = runningState.session?.totalDistanceMeters ?: 0
+    val duration = runningState.session?.durationSeconds ?: 0
+    val heartRate = runningState.session?.routePoints?.lastOrNull()?.heartRate
+    val pace = runningState.session?.routePoints?.lastOrNull()?.paceSeconds
+    val calories = runningState.session?.calories ?: 0
+    val isRunning = runningState.isRunning
+    val paused = runningState.isPaused
 
     Scaffold(
         timeText = { TimeText() }
@@ -141,7 +128,14 @@ fun RunningScreen(
                         Button(
                             onClick = {
                                 scope.launch {
-                                    if (paused) runningManager.resume() else runningManager.pause()
+                                    val newPausedState = !paused
+                                    if (newPausedState) {
+                                        runningManager.pause()
+                                    } else {
+                                        runningManager.resume()
+                                    }
+                                    // 폰으로 상태 알림
+                                    onPauseToggle(newPausedState)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(0.4f),
