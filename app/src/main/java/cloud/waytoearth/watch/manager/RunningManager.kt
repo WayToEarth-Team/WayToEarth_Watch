@@ -21,7 +21,18 @@ data class RunningState(
     val isRunning: Boolean = false
 )
 
-class RunningManager(private val context: Context) {
+class RunningManager private constructor(private val context: Context) {
+
+    companion object {
+        @Volatile
+        private var INSTANCE: RunningManager? = null
+
+        fun getInstance(context: Context): RunningManager {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: RunningManager(context.applicationContext).also { INSTANCE = it }
+            }
+        }
+    }
 
     private val TAG = "RunningManager"
     private val locationService = LocationService(context)
@@ -340,8 +351,10 @@ class RunningManager(private val context: Context) {
      * StateFlow 업데이트 헬퍼 함수
      */
     private fun updateRunningState() {
+        // Compose recomposition을 위해 새 객체 생성
+        val sessionCopy = currentSession?.copy()
         _runningState.value = RunningState(
-            session = currentSession,
+            session = sessionCopy,
             isPaused = paused,
             isRunning = currentSession != null
         )
