@@ -27,80 +27,15 @@ class HeartRateService(private val context: Context) {
 
     private val exerciseClient by lazy { HealthServices.getClient(context).exerciseClient }
 
-    // 심박수(BPM) 업데이트 스트림: Health Services 우선, 실패 시 센서 폴백
+    // 심박수(BPM) 업데이트 스트림: 워치 센서 직접 사용
     fun getHeartRateUpdates(): Flow<Int?> = callbackFlow {
-        val exerciseClient = try {
-            val c = HealthServices.getClient(context).exerciseClient
-            Log.d(TAG, "Health Services exerciseClient acquired")
-            c
-        } catch (t: Throwable) {
-            Log.w(TAG, "Health Services unavailable, fallback to sensor: ${t.message}")
-            null
-        }
-        if (exerciseClient != null) {
-            try {
-                val executor = ContextCompat.getMainExecutor(context)
-                val callbackInterface = Class.forName("androidx.health.services.client.ExerciseUpdateCallback")
-                val proxy = Proxy.newProxyInstance(
-                    callbackInterface.classLoader,
-                    arrayOf(callbackInterface)
-                ) { _, method, args ->
-                    // Object 기본 메서드 처리
-                    when (method.name) {
-                        "hashCode" -> return@newProxyInstance System.identityHashCode(this)
-                        "equals" -> return@newProxyInstance (args?.getOrNull(0) === this)
-                        "toString" -> return@newProxyInstance "ExerciseUpdateCallbackProxy@" + Integer.toHexString(System.identityHashCode(this))
-                    }
-                    if (method.name.contains("onExerciseUpdateReceived") && args != null && args.isNotEmpty()) {
-                        val update = args[0]
-                        try {
-                            // update.latestMetrics?.getData(DataType.HEART_RATE_BPM)?.lastOrNull()?.value
-                            val latestMetrics = update.javaClass.methods.firstOrNull { it.name == "getLatestMetrics" }?.invoke(update)
-                            val dataTypeClazz = Class.forName("androidx.health.services.client.data.DataType")
-                            val hrField = dataTypeClazz.getField("HEART_RATE_BPM")
-                            val hrType = hrField.get(null)
-                            val getDataMethod = latestMetrics?.javaClass?.methods?.firstOrNull { it.name == "getData" && it.parameterTypes.size == 1 }
-                            val list = getDataMethod?.invoke(latestMetrics, hrType) as? List<*>
-                            val last = list?.lastOrNull()
-                            val value = last?.javaClass?.methods?.firstOrNull { it.name == "getValue" }?.invoke(last)
-                            val bpm = when (value) {
-                                is Number -> value.toInt()
-                                else -> null
-                            }
-                            if (bpm != null && bpm > 0) {
-                                Log.v(TAG, "HS HR update bpm=$bpm")
-                                trySend(bpm)
-                            }
-                        } catch (_: Throwable) { /* ignore single update parse error */ }
-                    }
-                    null
-                }
-
-                // setUpdateCallback(executor, callback)
-                val setCb = exerciseClient.javaClass.methods.firstOrNull { it.name == "setUpdateCallback" && it.parameterTypes.size == 2 }
-                if (setCb != null) {
-                    setCb.invoke(exerciseClient, executor, proxy)
-                    Log.d(TAG, "Health Services update callback registered")
-                    awaitClose {
-                        try {
-                            val clear = exerciseClient.javaClass.methods.firstOrNull { it.name.contains("clear") && it.parameterTypes.isEmpty() }
-                            clear?.invoke(exerciseClient)
-                            Log.d(TAG, "Health Services update callback cleared")
-                        } catch (_: Throwable) {}
-                    }
-                    return@callbackFlow
-                }
-                Log.w(TAG, "Health Services setUpdateCallback not found, sensor fallback")
-            } catch (_: Throwable) { /* fallback to sensor */ }
-        }
-
-        // 센서 폴백
         val sensor = heartRateSensor
         if (sensor == null) {
             Log.e(TAG, "No heart rate sensor available")
             close(); return@callbackFlow
         }
-        Log.d(TAG, "Using Sensor fallback for heart rate")
+
+        Log.d(TAG, "Using watch heart rate sensor directly")
         var ema: Double? = null
         val alpha = 0.3
         var lastEmit = 0L
@@ -123,8 +58,11 @@ class HeartRateService(private val context: Context) {
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) { }
         }
         sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-        Log.d(TAG, "Sensor listener registered")
-        awaitClose { sensorManager.unregisterListener(listener) }
+        Log.d(TAG, "Heart rate sensor listener registered")
+        awaitClose {
+            sensorManager.unregisterListener(listener)
+            Log.d(TAG, "Heart rate sensor listener unregistered")
+        }
     }
 
     // Health Services로 운동 세션 켜서 HR/배터리 최적화, 측정은 센서 사용
