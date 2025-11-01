@@ -132,15 +132,37 @@ class HeartRateService(private val context: Context) {
         try {
             val config = ExerciseConfig(
                 exerciseType = ExerciseType.RUNNING,
-                dataTypes = setOf(DataType.HEART_RATE_BPM),
+                dataTypes = setOf(
+                    DataType.HEART_RATE_BPM,
+                    DataType.DISTANCE,
+                    DataType.SPEED,
+                    DataType.PACE,
+                    DataType.LOCATION
+                ),
                 isAutoPauseAndResumeEnabled = false,
                 isGpsEnabled = true
             )
-            // 일부 버전에서 메서드 시그니처 차이를 회피하기 위해 리플렉션 사용
+
+            // prepareExercise 먼저 호출 (일부 기기에서 필수)
+            try {
+                val prepareMethod = exerciseClient.javaClass.methods.firstOrNull { it.name == "prepareExercise" }
+                if (prepareMethod != null) {
+                    prepareMethod.invoke(exerciseClient, config)
+                    Log.d(TAG, "Health Services exercise PREPARE requested")
+                    // prepare 후 2초 대기 (센서 초기화 시간)
+                    kotlinx.coroutines.delay(2000)
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "prepareExercise failed: ${e.message}")
+            }
+
+            // startExercise 호출
             val method = exerciseClient.javaClass.methods.firstOrNull { it.name == "startExercise" }
             method?.invoke(exerciseClient, config)
             Log.d(TAG, "Health Services exercise START requested")
-        } catch (_: Throwable) { /* 폴백 유지 */ }
+        } catch (e: Throwable) {
+            Log.w(TAG, "startExercise failed: ${e.message}")
+        }
     }
 
     suspend fun endExercise() {
