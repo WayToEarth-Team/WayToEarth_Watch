@@ -69,7 +69,8 @@ class PhoneCommunicationService(private val context: Context) {
         return sendMessageAll(PATH_RUNNING_COMPLETE, json.toByteArray())
     }
 
-    // 최종 세션 데이터 전송 (서버 스펙 변환 버전, MessageClient)
+    // 최종 세션 데이터 전송 (서버 스펙 변환 버전, MessageClient) - DEPRECATED
+    @Deprecated("Use sendRunningCompleteDataLayer instead", ReplaceWith("sendRunningCompleteDataLayer"))
     suspend fun sendRunningCompleteTransformed(
         sessionId: String,
         distanceMeters: Int,
@@ -94,6 +95,46 @@ class PhoneCommunicationService(private val context: Context) {
         val json = gson.toJson(payload)
         Log.d(TAG, "sendRunningCompleteTransformed size=${json.length}")
         return sendMessageAll(PATH_RUNNING_COMPLETE, json.toByteArray())
+    }
+
+    // 최종 세션 데이터 전송 (서버 스펙 변환 버전, DataClient)
+    suspend fun sendRunningCompleteDataLayer(
+        sessionId: String,
+        distanceMeters: Int,
+        durationSeconds: Int,
+        averagePaceSeconds: Int?,
+        calories: Int,
+        averageHeartRate: Int?,
+        maxHeartRate: Int?,
+        routePoints: List<Map<String, Any?>>
+    ): Boolean {
+        return try {
+            val payload = mapOf(
+                "sessionId" to sessionId,
+                "distanceMeters" to distanceMeters,
+                "durationSeconds" to durationSeconds,
+                "averagePaceSeconds" to averagePaceSeconds,
+                "calories" to calories,
+                "averageHeartRate" to averageHeartRate,
+                "maxHeartRate" to maxHeartRate,
+                "routePoints" to routePoints,
+                "endedAt" to System.currentTimeMillis()
+            )
+            val json = gson.toJson(payload)
+            Log.d(TAG, "sendRunningCompleteDataLayer size=${json.length}")
+
+            val putDataReq = PutDataMapRequest.create(PATH_RUNNING_COMPLETE).apply {
+                dataMap.putString("session_data", json)
+                dataMap.putLong("timestamp", System.currentTimeMillis())
+            }.asPutDataRequest().setUrgent()
+
+            dataClient.putDataItem(putDataReq).await()
+            Log.d(TAG, "sendRunningCompleteDataLayer OK (DataClient)")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "sendRunningCompleteDataLayer failed: ${e.message}", e)
+            false
+        }
     }
 
     // 실시간 업데이트 전송 (10초마다)

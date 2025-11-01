@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Blog post (개인 블로그 초안)
+BLOG_POST.md
