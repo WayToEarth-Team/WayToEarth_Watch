@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        runningManager = RunningManager(this)
+        runningManager = RunningManager.getInstance(this)
         phoneCommunication = PhoneCommunicationService(this)
 
         setContent {

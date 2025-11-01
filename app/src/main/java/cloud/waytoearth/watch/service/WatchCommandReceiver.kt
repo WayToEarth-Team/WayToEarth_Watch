@@ -19,7 +19,7 @@ class WatchCommandReceiver : WearableListenerService() {
 
     override fun onCreate() {
         super.onCreate()
-        runningManager = RunningManager(this)
+        runningManager = RunningManager.getInstance(this)
         comm = PhoneCommunicationService(this)
     }
 
