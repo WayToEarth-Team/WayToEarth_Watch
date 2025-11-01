@@ -17,16 +17,17 @@ fun PermissionScreen(onPermissionsGranted: () -> Unit) {
         buildList {
             add(android.Manifest.permission.ACCESS_FINE_LOCATION)
             add(android.Manifest.permission.ACTIVITY_RECOGNITION)
-            // COARSE는 선택적으로 유지(일부 기기 호환)
             add(android.Manifest.permission.ACCESS_COARSE_LOCATION)
 
-            if (Build.VERSION.SDK_INT >= 36) {
-                // Wear OS 6(API 36+) 신권한
-                add("android.permission.health.READ_HEART_RATE")
-            } else {
-                // Wear OS 5.1(API 35) 이하
-                add(android.Manifest.permission.BODY_SENSORS)
+            // BODY_SENSORS (모든 버전)
+            add(android.Manifest.permission.BODY_SENSORS)
+            if (Build.VERSION.SDK_INT >= 29) {
                 add("android.permission.BODY_SENSORS_BACKGROUND")
+            }
+
+            // READ_HEART_RATE (API 30+에서 사용 가능, API 36+에서 필수)
+            if (Build.VERSION.SDK_INT >= 30) {
+                add("android.permission.health.READ_HEART_RATE")
             }
         }
     }

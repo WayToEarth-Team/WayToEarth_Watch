@@ -449,6 +449,14 @@ adb -s [워치디바이스ID] logcat | grep "sendRunningCompleteTransformed"
 
 ---
 
+
+### 테스트 필요 사항
+- [ ] 심박수 체크
+- [ ] gps 신호 
+- [ ] 거리 계산 로직
+- [ ] 페이스 체크
+- ---
+
 ## 빠른 테스트 명령어 모음
 
 ```bash
