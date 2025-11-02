@@ -10,7 +10,7 @@ Wear OS 기반 러닝 트래킹 워치 애플리케이션으로, 실시간 GPS, 
 
 ### 1. 러닝 데이터 수집
 - **GPS 위치 추적**: 1초마다 위치 데이터 수집
-- **심박수 모니터링**: Health Services API를 통한 실시간 심박수 측정
+- **심박수 모니터링**: 워치 하드웨어 센서를 직접 사용한 실시간 심박수 측정 (EMA 필터링 적용)
 - **거리 계산**: Health Services 거리 또는 GPS 기반 거리 계산
 - **페이스 계산**: 최근 100m 기준 즉시 페이스 계산
 - **칼로리 계산**: 거리 기반 칼로리 소모량 추정 (1km당 60kcal)
@@ -181,7 +181,7 @@ Path: `/waytoearth/running/complete`
 
 **데이터 수집**:
 - GPS 위치: 1초마다 수집
-- 심박수: Health Services를 통해 실시간 수집
+- 심박수: 워치 하드웨어 센서(TYPE_HEART_RATE)를 직접 사용, EMA 필터링으로 노이즈 제거
 - 거리: Health Services 거리 우선, GPS 증분 계산
 - 페이스: 최근 100m 기준 즉시 페이스 계산
 - 일시정지 시 위치 업데이트는 수신하지만 거리 계산 중지
@@ -202,9 +202,11 @@ GPS 위치 추적을 담당하는 서비스입니다.
 **위치**: `app/src/main/java/cloud/waytoearth/watch/service/HeartRateService.kt`
 
 **주요 기능**:
-- Health Services `ExerciseClient` 사용
-- 러닝 운동 모드로 심박수 추적
-- 실시간 심박수 데이터 스트림 제공
+- **워치 하드웨어 센서 직접 사용**: `SensorManager`와 `Sensor.TYPE_HEART_RATE`로 센서 직접 제어
+- **EMA 필터링**: Exponential Moving Average (alpha=0.3)로 센서 노이즈 제거
+- **1초 간격 업데이트**: `SensorEventListener`를 통해 실시간 심박수 수집
+- **Health Services 운동 세션**: 배터리 최적화를 위해 ExerciseClient로 RUNNING 모드 활성화
+- **Flow 기반 스트림**: 심박수 데이터를 Flow로 제공하여 RunningManager와 연동
 
 ### HealthMetricsService
 Health Services의 통합 메트릭을 수집하는 서비스입니다.
@@ -281,7 +283,7 @@ data class RunningState(
 - `play-services-location`: GPS 위치 추적
 
 ### Health Services
-- `health-services-client`: 심박수 및 운동 메트릭
+- `health-services-client`: 운동 세션 관리 및 배터리 최적화 (심박수는 센서 직접 사용)
 
 ### Libraries
 - `kotlinx-coroutines-android`: 비동기 처리
@@ -294,9 +296,11 @@ data class RunningState(
 ### AndroidManifest.xml
 ```xml
 <uses-permission android:name="android.permission.BODY_SENSORS" />
+<uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+<uses-permission android:name="android.permission.health.READ_HEART_RATE" />
 ```
 
 ## 설치 및 실행
@@ -430,9 +434,10 @@ data class RunningState(
 3. 실외에서 테스트 (GPS 신호 수신 필요)
 
 ### 심박수가 수집되지 않는 경우
-1. BODY_SENSORS 권한이 승인되었는지 확인
-2. 워치를 손목에 착용했는지 확인
-3. Health Services가 지원되는 기기인지 확인
+1. BODY_SENSORS 및 BODY_SENSORS_BACKGROUND 권한이 승인되었는지 확인
+2. 워치를 손목에 착용했는지 확인 (센서가 피부에 밀착되어야 함)
+3. 워치에 TYPE_HEART_RATE 센서가 있는지 확인
+4. HeartRateService가 제대로 시작되었는지 로그 확인
 
 ## 라이선스
 
