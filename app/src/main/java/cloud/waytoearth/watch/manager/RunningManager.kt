@@ -186,11 +186,12 @@ class RunningManager private constructor(private val context: Context) {
         val elapsedSeconds = ((System.currentTimeMillis() - session.startTime) / 1000).toInt()
         session.durationSeconds = elapsedSeconds
 
-        // 즉시 페이스 계산 (최근 100m 기준)
+        // 즉시 페이스 계산 (최근 100m 기준, 안전한 복사본 사용)
+        val pointsCopy = session.routePoints.toList() // ConcurrentModificationException 방지
         val instantPace = when {
             hsPaceSeconds != null -> hsPaceSeconds
             hsSpeedMps != null && hsSpeedMps!! > 0.0 -> (1000.0 / hsSpeedMps!!).toInt()
-            else -> calculateInstantPace(session.routePoints)
+            else -> calculateInstantPace(pointsCopy, session.totalDistanceMeters, elapsedSeconds)
         }
 
         // RoutePoint 생성
@@ -218,13 +219,19 @@ class RunningManager private constructor(private val context: Context) {
     }
 
     /**
-     * 즉시 페이스 계산 (최근 100m 기준)
+     * 즉시 페이스 계산 (최근 100m 기준, 거리 부족 시 전체 평균)
      */
-    private fun calculateInstantPace(points: List<RoutePoint>): Int? {
-        if (points.size < 2) return null
+    private fun calculateInstantPace(points: List<RoutePoint>, totalDistance: Int, totalDuration: Int): Int? {
+        if (points.isEmpty()) return null
+
+        // 거리가 100m 미만이면 전체 평균 페이스 계산
+        if (totalDistance < 100) {
+            if (totalDistance < 10 || totalDuration < 5) return null // 너무 짧으면 null
+            return DistanceCalculator.calculatePace(totalDistance, totalDuration)
+        }
 
         // 최근 100m 구간 찾기
-        val currentDistance = points.last().cumulativeDistanceMeters
+        val currentDistance = totalDistance
         val targetDistance = currentDistance - 100
 
         val startPoint = points.findLast {
@@ -232,7 +239,9 @@ class RunningManager private constructor(private val context: Context) {
         } ?: return null
 
         val recentDistance = (currentDistance - startPoint.cumulativeDistanceMeters).toDouble()
-        val recentDuration = points.last().timestampSeconds - startPoint.timestampSeconds
+        val recentDuration = totalDuration - startPoint.timestampSeconds
+
+        if (recentDuration <= 0 || recentDistance <= 0) return null
 
         return DistanceCalculator.calculateInstantPace(recentDistance, recentDuration)
     }
