@@ -19,6 +19,7 @@ class PhoneCommunicationService(private val context: Context) {
         const val PATH_COMMAND_STOP = "/waytoearth/command/stop"
         const val PATH_COMMAND_PAUSE = "/waytoearth/command/pause"
         const val PATH_COMMAND_RESUME = "/waytoearth/command/resume"
+        const val PATH_COMMAND_SYNC_PROFILE = "/waytoearth/command/sync_profile"
 
         const val PATH_RESPONSE_STARTED = "/waytoearth/response/started"
         const val PATH_RESPONSE_STOPPED = "/waytoearth/response/stopped"
