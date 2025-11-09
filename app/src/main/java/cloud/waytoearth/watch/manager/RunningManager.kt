@@ -12,6 +12,7 @@ import cloud.waytoearth.watch.service.PhoneCommunicationService
 import cloud.waytoearth.watch.utils.CalorieCalculator
 import cloud.waytoearth.watch.utils.DistanceCalculator
 import cloud.waytoearth.watch.utils.HeartRateCalculator
+import cloud.waytoearth.watch.utils.UserPreferences
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.*
@@ -213,9 +214,11 @@ class RunningManager private constructor(private val context: Context) {
 
         session.routePoints.add(routePoint)
         // 칼로리 계산 (METs 기반, 백엔드/프론트엔드와 동일)
+        val userWeight = UserPreferences.getWeight(context)
         session.calories = CalorieCalculator.calculateFromMeters(
             session.totalDistanceMeters,
-            session.durationSeconds
+            session.durationSeconds,
+            userWeight
         )
         if ((prevSize + 1) % 10 == 0) {
             Log.d(TAG, "RoutePoint added count=${prevSize + 1} dist=${session.totalDistanceMeters}m dur=${session.durationSeconds}s")
@@ -286,9 +289,11 @@ class RunningManager private constructor(private val context: Context) {
         )
 
         // 칼로리 계산 (METs 기반, 백엔드/프론트엔드와 동일)
+        val userWeight = UserPreferences.getWeight(context)
         session.calories = CalorieCalculator.calculateFromMeters(
             session.totalDistanceMeters,
-            session.durationSeconds
+            session.durationSeconds,
+            userWeight
         )
 
         currentSession = null
