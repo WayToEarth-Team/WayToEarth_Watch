@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import cloud.waytoearth.watch.manager.RunningManager
+import cloud.waytoearth.watch.utils.UserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,7 @@ class WatchCommandReceiver : WearableListenerService() {
             PhoneCommunicationService.PATH_COMMAND_STOP -> handleStop(messageEvent)
             PhoneCommunicationService.PATH_COMMAND_PAUSE -> handlePause(messageEvent)
             PhoneCommunicationService.PATH_COMMAND_RESUME -> handleResume(messageEvent)
+            PhoneCommunicationService.PATH_COMMAND_SYNC_PROFILE -> handleSyncProfile(messageEvent)
             else -> Log.w(tag, "Unknown path: ${messageEvent.path}")
         }
     }
@@ -154,6 +156,32 @@ class WatchCommandReceiver : WearableListenerService() {
             } catch (e: Exception) {
                 Log.e(tag, "Failed to handle RESUME", e)
                 comm.sendResponseResumed(mapOf("success" to false, "error" to (e.message ?: "unknown")))
+            }
+        }
+    }
+
+    private fun handleSyncProfile(messageEvent: MessageEvent) {
+        scope.launch {
+            try {
+                val json = JSONObject(String(messageEvent.data))
+                val weight = json.optInt("weight", 0)
+                val height = json.optInt("height", 0)
+
+                Log.d(tag, "SYNC_PROFILE command: weight=$weight, height=$height")
+
+                // 체중과 키 저장 (0이 아닌 값만)
+                if (weight > 0) {
+                    UserPreferences.saveWeight(applicationContext, weight)
+                    Log.d(tag, "Weight saved: $weight kg")
+                }
+                if (height > 0) {
+                    UserPreferences.saveHeight(applicationContext, height)
+                    Log.d(tag, "Height saved: $height cm")
+                }
+
+                Log.d(tag, "SYNC_PROFILE handled successfully")
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to handle SYNC_PROFILE", e)
             }
         }
     }
