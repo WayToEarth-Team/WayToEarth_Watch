@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Load keystore.properties for release signing (if present)
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.inputStream().use { keystoreProps.load(it) }
 }
 
 android {
@@ -23,6 +32,20 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            val sFile = keystoreProps.getProperty("storeFile")
+            val sPass = keystoreProps.getProperty("storePassword")
+            val kAlias = keystoreProps.getProperty("keyAlias")
+            val kPass = keystoreProps.getProperty("keyPassword")
+            if (sFile != null && sPass != null && kAlias != null && kPass != null) {
+                storeFile = rootProject.file(sFile)
+                storePassword = sPass
+                keyAlias = kAlias
+                keyPassword = kPass
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
     }
 
     buildTypes {
@@ -30,6 +53,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -55,7 +79,6 @@ android {
 }
 
 dependencies {
-    // 기본 (기존에 있던 것들)
     implementation(libs.play.services.wearable)
     implementation(platform(libs.compose.bom))
     implementation(libs.ui)
@@ -66,32 +89,29 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.core.splashscreen)
 
-    // ========== 워치 앱 개발을 위해 추가 ==========
-
-    // Wear OS 기본
+    // Wear OS
     implementation("androidx.wear:wear:1.3.0")
     implementation("com.google.android.support:wearable:2.9.0")
     compileOnly("com.google.android.wearable:wearable:2.9.0")
 
-    // Google Play Services - 위치 추적 (GPS)
+    // Google Play Services - Location
     implementation("com.google.android.gms:play-services-location:21.0.1")
 
-    // Health Services - 심박수 센서 (안정화 버전)
+    // Health Services
     implementation("androidx.health:health-services-client:1.0.0")
 
-    // Coroutines - 비동기 처리
+    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-    // JSON - 데이터 직렬화 (폰으로 전송용)
+    // JSON
     implementation("com.google.code.gson:gson:2.10.1")
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
 
-    // Permissions (런타임 권한 요청)
+    // Permissions
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
     // Debug

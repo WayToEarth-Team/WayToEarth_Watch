@@ -12,6 +12,8 @@
     <!-- GPS 위치 권한 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 심박수 센서 권한 -->
     <uses-permission android:name="android.permission.BODY_SENSORS" android:maxSdkVersion="35" />

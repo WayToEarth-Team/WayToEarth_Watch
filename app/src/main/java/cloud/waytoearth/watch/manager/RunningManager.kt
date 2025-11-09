@@ -49,6 +49,9 @@ class RunningManager private constructor(private val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var realtimeJob: Job? = null
+    private var locationJob: Job? = null
+    private var metricsJob: Job? = null
+    private var heartRateJob: Job? = null
 
     // StateFlow로 상태 관리 - UI가 구독할 수 있도록
     private val _runningState = MutableStateFlow(RunningState())
@@ -78,7 +81,7 @@ class RunningManager private constructor(private val context: Context) {
 
         // HS 메트릭 수집 시작
         val metricsService = HealthMetricsService(context)
-        scope.launch {
+        metricsJob = scope.launch {
             metricsService.metricsFlow().collect { m ->
                 m.heartRate?.let {
                     currentHeartRate = it
@@ -97,7 +100,7 @@ class RunningManager private constructor(private val context: Context) {
         }
 
         // 위치 수집 시작 (1초마다)
-        scope.launch {
+        locationJob = scope.launch {
             locationService.getLocationUpdates().collect { location ->
                 onLocationUpdate(location)
             }
@@ -125,7 +128,7 @@ class RunningManager private constructor(private val context: Context) {
         heartRateService.startExercise()
         Log.d(TAG, "Exercise start requested (HS)")
 
-        scope.launch {
+        heartRateJob = scope.launch {
             heartRateService.getHeartRateUpdates().collect { hr ->
                 currentHeartRate = hr
                 if (hr != null) Log.v(TAG, "HR update bpm=$hr")
@@ -133,7 +136,7 @@ class RunningManager private constructor(private val context: Context) {
         }
         // HS 메트릭 수집 시작 (심박/거리/페이스/속도)
         val metricsService2 = HealthMetricsService(context)
-        scope.launch {
+        metricsJob = scope.launch {
             metricsService2.metricsFlow().collect { m ->
                 m.heartRate?.let { currentHeartRate = it; Log.v(TAG, "HS HR bpm=$it") }
                 m.distanceMeters?.let {
@@ -148,7 +151,7 @@ class RunningManager private constructor(private val context: Context) {
             }
         }
 
-        scope.launch {
+        locationJob = scope.launch {
             locationService.getLocationUpdates().collect { location ->
                 onLocationUpdate(location)
             }
@@ -252,6 +255,15 @@ class RunningManager private constructor(private val context: Context) {
      */
     suspend fun stopRunning(): RunningSession? {
         val session = currentSession ?: return null
+
+        // 모든 데이터 수집 Job 취소
+        locationJob?.cancel()
+        metricsJob?.cancel()
+        heartRateJob?.cancel()
+        locationJob = null
+        metricsJob = null
+        heartRateJob = null
+        Log.d(TAG, "All data collection jobs cancelled")
 
         // Health Services 종료
         heartRateService.endExercise()
