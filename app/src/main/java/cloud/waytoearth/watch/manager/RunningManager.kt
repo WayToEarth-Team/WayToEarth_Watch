@@ -11,6 +11,7 @@ import cloud.waytoearth.watch.service.LocationService
 import cloud.waytoearth.watch.service.PhoneCommunicationService
 import cloud.waytoearth.watch.utils.DistanceCalculator
 import cloud.waytoearth.watch.utils.HeartRateCalculator
+import cloud.waytoearth.watch.utils.LocationFilter
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.*
@@ -40,12 +41,18 @@ class RunningManager private constructor(private val context: Context) {
 
     private var currentSession: RunningSession? = null
     private var lastLocation: Location? = null
+    private var lastTimestamp: Long = 0L
+    private var prevAccuracy: Float = 0f
     private var currentHeartRate: Int? = null
     private var hsDistanceMeters: Int? = null
     private var hsPaceSeconds: Int? = null
     private var hsSpeedMps: Double? = null
     private var useHsDistance: Boolean = false
     private var paused: Boolean = false
+    private var isStationary: Boolean = false
+
+    // 10초 윈도우를 위한 위치 큐
+    private val locationWindow = mutableListOf<Pair<Location, Long>>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var realtimeJob: Job? = null
