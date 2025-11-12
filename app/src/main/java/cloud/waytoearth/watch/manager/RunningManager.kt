@@ -167,44 +167,97 @@ class RunningManager private constructor(private val context: Context) {
 
     /**
      * 위치 업데이트 처리 (1초마다 수신됨)
+     * 프론트엔드와 동일한 필터링 로직 적용
      */
     private fun onLocationUpdate(location: Location) {
         val session = currentSession ?: return
-        val prevSize = session.routePoints.size
+        val now = System.currentTimeMillis()
 
+        // === 1️⃣ 위치 필터링 (프론트엔드 동기화) ===
+        val shouldIgnore = LocationFilter.shouldIgnoreSample(
+            lastLocation,
+            location,
+            lastTimestamp,
+            now
+        )
 
-        if (paused) {
-            lastLocation = location
+        if (shouldIgnore) {
+            Log.v(TAG, "Location ignored by filter acc=${location.accuracy}m")
             return
         }
-        // 거리 계산: HS 거리 우선, 아니면 GPS 증분
+
+        // === 2️⃣ 10초 윈도우 유지 및 정지 감지 ===
+        locationWindow.add(Pair(location, now))
+        locationWindow.removeAll { it.second < now - 10000 } // 10초 이전 제거
+
+        val stationaryState = LocationFilter.detectStationary(locationWindow)
+
+        // 정지 상태 업데이트
+        if (stationaryState.isStationary && !isStationary) {
+            isStationary = true
+            Log.d(TAG, "Stationary detected: speed=${String.format("%.2f", stationaryState.windowSpeed)} m/s, dist=${String.format("%.2f", stationaryState.windowDistance)} m")
+        }
+
+        // 재개 판정
+        if (isStationary && LocationFilter.shouldResumeFromStationary(
+                stationaryState.windowSpeed,
+                stationaryState.windowDistance,
+                location.speed
+            )) {
+            isStationary = false
+            Log.d(TAG, "Resumed from stationary")
+        }
+
+        // 일시정지 또는 정지 상태에서는 거리 계산 안 함
+        if (paused || isStationary) {
+            lastLocation = location
+            lastTimestamp = now
+            prevAccuracy = location.accuracy
+            return
+        }
+
+        val prevSize = session.routePoints.size
+
+        // === 3️⃣ 거리 계산 (필터링 및 보정 적용) ===
         if (!useHsDistance) {
-            val distanceIncrement = if (lastLocation != null) {
-                DistanceCalculator.calculateDistance(
+            if (lastLocation != null) {
+                val rawDistance = DistanceCalculator.calculateDistance(
                     lastLocation!!.latitude,
                     lastLocation!!.longitude,
                     location.latitude,
                     location.longitude
                 )
-            } else {
-                0.0
+
+                // 거리 보정: 노이즈 차감
+                val effectiveDistance = LocationFilter.calculateEffectiveDistance(
+                    rawDistance,
+                    prevAccuracy,
+                    location.accuracy
+                )
+
+                if (effectiveDistance > 0) {
+                    session.totalDistanceMeters += effectiveDistance.toInt()
+                    Log.v(TAG, "Distance added: raw=${String.format("%.2f", rawDistance)}m, effective=${String.format("%.2f", effectiveDistance)}m")
+                }
             }
-            session.totalDistanceMeters += distanceIncrement.toInt()
+        } else {
+            // Health Services 거리 사용 (이미 hsDistanceMeters에 설정됨)
+            Log.v(TAG, "Using HS distance: ${session.totalDistanceMeters}m")
         }
 
-        // 경과 시간 계산 (초)
-        val elapsedSeconds = ((System.currentTimeMillis() - session.startTime) / 1000).toInt()
+        // === 4️⃣ 경과 시간 계산 ===
+        val elapsedSeconds = ((now - session.startTime) / 1000).toInt()
         session.durationSeconds = elapsedSeconds
 
-        // 즉시 페이스 계산 (최근 100m 기준, 안전한 복사본 사용)
-        val pointsCopy = session.routePoints.toList() // ConcurrentModificationException 방지
+        // === 5️⃣ 페이스 계산 ===
+        val pointsCopy = session.routePoints.toList()
         val instantPace = when {
             hsPaceSeconds != null -> hsPaceSeconds
             hsSpeedMps != null && hsSpeedMps!! > 0.0 -> (1000.0 / hsSpeedMps!!).toInt()
             else -> calculateInstantPace(pointsCopy, session.totalDistanceMeters, elapsedSeconds)
         }
 
-        // RoutePoint 생성
+        // === 6️⃣ RoutePoint 생성 ===
         val routePoint = RoutePoint(
             latitude = location.latitude,
             longitude = location.longitude,
@@ -219,10 +272,15 @@ class RunningManager private constructor(private val context: Context) {
 
         session.routePoints.add(routePoint)
         session.calories = (session.totalDistanceMeters / 1000.0 * 60).toInt()
+
         if ((prevSize + 1) % 10 == 0) {
-            Log.d(TAG, "RoutePoint added count=${prevSize + 1} dist=${session.totalDistanceMeters}m dur=${session.durationSeconds}s")
+            Log.d(TAG, "RoutePoint added count=${prevSize + 1} dist=${session.totalDistanceMeters}m dur=${session.durationSeconds}s acc=${location.accuracy}m")
         }
+
+        // === 7️⃣ 상태 업데이트 ===
         lastLocation = location
+        lastTimestamp = now
+        prevAccuracy = location.accuracy
 
         // StateFlow 업데이트
         updateRunningState()
