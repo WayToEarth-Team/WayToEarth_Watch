@@ -350,8 +350,12 @@ class RunningManager private constructor(private val context: Context) {
 
         currentSession = null
         lastLocation = null
+        lastTimestamp = 0L
+        prevAccuracy = 0f
         currentHeartRate = null
         paused = false
+        isStationary = false
+        locationWindow.clear()
 
         // StateFlow 업데이트
         updateRunningState()
